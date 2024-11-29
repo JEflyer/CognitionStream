@@ -86,6 +86,24 @@ class EnhancedMemorySystem {
     checkMemoryLimits(type, size) {
         return size <= this.memoryLimits[type];
     }
+
+    async getUsageMetrics() {
+        return {
+            shortTerm: {
+                size: this.shortTermMemory.size,
+                capacityUsed: this.shortTermMemory.size / this.memoryLimits.shortTerm
+            },
+            working: {
+                size: this.workingMemory.size(),
+                capacityUsed: this.workingMemory.size() / this.memoryLimits.working
+            },
+            vector: await this.vectorStore.getUsageMetrics(),
+            lastCleanup: this.lastCleanupTime,
+            totalEntries: this.shortTermMemory.size + 
+                         this.workingMemory.size() + 
+                         await this.vectorStore.getEntryCount()
+        };
+    }
 }
 
 // Enhanced Vector Store with improved similarity search
