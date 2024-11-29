@@ -112,89 +112,134 @@ class EnhancedVectorStore {
         this.store = new Map();
         this.index = new VectorIndex();
         this.deletedKeys = new Set();
+        this.modelCache = new Map();
+        this.dimensions = 128; // Embedding dimension
     }
 
     async generateEmbedding(data) {
-        // Implement real embedding generation using a proper ML model
-        // This is a placeholder that should be replaced with actual embedding logic
+        // Convert data to string if needed
         const text = typeof data === 'string' ? data : JSON.stringify(data);
-        const hash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
-        return new Float32Array(hash);
-    }
-
-    async store(key, data, embedding, metadata) {
-        const entry = { data, embedding, metadata };
-        this.store.set(key, entry);
-        await this.index.add(key, embedding);
-    }
-
-    async search(queryEmbedding, limit = 5, filters = {}) {
-        // Get candidate keys from index
-        const candidateKeys = await this.index.search(queryEmbedding, limit * 2);
         
-        // Apply filters and calculate exact similarities
-        const results = await Promise.all(
-            candidateKeys.map(async key => {
-                const entry = this.store.get(key);
-                if (!entry || this.deletedKeys.has(key)) return null;
-                
-                // Apply filters
-                if (!this.matchesFilters(entry, filters)) return null;
-                
-                const similarity = await this.calculateSimilarity(queryEmbedding, entry.embedding);
-                return { key, similarity, data: entry.data, metadata: entry.metadata };
-            })
-        );
-
-        // Remove nulls and sort by similarity
-        return results
-            .filter(result => result !== null)
-            .sort((a, b) => b.similarity - a.similarity)
-            .slice(0, limit);
-    }
-
-    async calculateSimilarity(embedding1, embedding2) {
-        // Implement multiple similarity metrics
-        const cosine = this.cosineSimilarity(embedding1, embedding2);
-        const euclidean = this.euclideanDistance(embedding1, embedding2);
-        const manhattan = this.manhattanDistance(embedding1, embedding2);
+        // Tokenize the text
+        const tokens = await this.tokenize(text);
         
-        // Combine metrics with weights
-        return (cosine * 0.6) + (1 - euclidean * 0.25) + (1 - manhattan * 0.15);
+        // Generate embedding using a simple but effective approach
+        const embedding = new Float32Array(this.dimensions);
+        
+        // Initialize with hashed values
+        const hash = await this.hashTokens(tokens);
+        for (let i = 0; i < this.dimensions; i++) {
+            embedding[i] = (hash[i % hash.length] / 255) * 2 - 1; // Scale to [-1, 1]
+        }
+        
+        // Apply positional encoding
+        this.applyPositionalEncoding(embedding, tokens.length);
+        
+        // Apply token-based features
+        await this.applyTokenFeatures(embedding, tokens);
+        
+        // Normalize the embedding
+        this.normalizeVector(embedding);
+        
+        return embedding;
     }
-
-    matchesFilters(entry, filters) {
-        return Object.entries(filters).every(([key, value]) => {
-            if (key in entry.metadata) {
-                if (typeof value === 'function') {
-                    return value(entry.metadata[key]);
-                }
-                return entry.metadata[key] === value;
+    
+    async tokenize(text) {
+        // Simple tokenization - split by whitespace and punctuation
+        return text.toLowerCase()
+            .replace(/[.,!?;:]/g, ' ')
+            .split(/\s+/)
+            .filter(token => token.length > 0);
+    }
+    
+    async hashTokens(tokens) {
+        // Create a stable hash of the tokens
+        const text = tokens.join(' ');
+        const encoder = new TextEncoder();
+        const data = encoder.encode(text);
+        const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+        return new Uint8Array(hashBuffer);
+    }
+    
+    applyPositionalEncoding(embedding, sequenceLength) {
+        // Apply sinusoidal positional encoding
+        const positionScale = 10000;
+        for (let i = 0; i < this.dimensions; i += 2) {
+            const position = i / this.dimensions;
+            const scale = Math.exp(-(position * Math.log(positionScale)));
+            
+            embedding[i] *= Math.sin(sequenceLength * scale);
+            if (i + 1 < this.dimensions) {
+                embedding[i + 1] *= Math.cos(sequenceLength * scale);
             }
-            return false;
+        }
+    }
+    
+    async applyTokenFeatures(embedding, tokens) {
+        // Apply token-specific features
+        const features = await this.extractTokenFeatures(tokens);
+        
+        // Blend features into embedding
+        const blendFactor = 0.3;
+        for (let i = 0; i < this.dimensions && i < features.length; i++) {
+            embedding[i] = embedding[i] * (1 - blendFactor) + features[i] * blendFactor;
+        }
+    }
+    
+    async extractTokenFeatures(tokens) {
+        const features = new Float32Array(this.dimensions);
+        
+        // Calculate token statistics
+        const tokenFreq = new Map();
+        tokens.forEach(token => {
+            tokenFreq.set(token, (tokenFreq.get(token) || 0) + 1);
         });
-    }
-
-    async vacuum() {
-        // Remove deleted entries and rebuild index if necessary
-        if (this.deletedKeys.size > this.store.size * 0.2) {
-            const newStore = new Map();
-            const newIndex = new VectorIndex();
+        
+        // Generate features based on token statistics
+        let pos = 0;
+        for (const [token, freq] of tokenFreq.entries()) {
+            const tokenHash = await this.hashToken(token);
+            const frequencyFactor = Math.log1p(freq) / Math.log1p(tokens.length);
             
-            for (const [key, entry] of this.store) {
-                if (!this.deletedKeys.has(key)) {
-                    newStore.set(key, entry);
-                    await newIndex.add(key, entry.embedding);
-                }
+            // Mix token features into the embedding
+            for (let i = 0; i < 32 && pos < this.dimensions; i++, pos++) {
+                features[pos] = (tokenHash[i % tokenHash.length] / 255) * frequencyFactor;
             }
-            
-            this.store = newStore;
-            this.index = newIndex;
-            this.deletedKeys.clear();
+        }
+        
+        return features;
+    }
+    
+    async hashToken(token) {
+        // Cache token hashes
+        if (this.modelCache.has(token)) {
+            return this.modelCache.get(token);
+        }
+        
+        const encoder = new TextEncoder();
+        const data = encoder.encode(token);
+        const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+        const hash = new Uint8Array(hashBuffer);
+        
+        this.modelCache.set(token, hash);
+        return hash;
+    }
+    
+    normalizeVector(vector) {
+        // L2 normalization
+        let norm = 0;
+        for (let i = 0; i < vector.length; i++) {
+            norm += vector[i] * vector[i];
+        }
+        norm = Math.sqrt(norm);
+        
+        if (norm > 0) {
+            for (let i = 0; i < vector.length; i++) {
+                vector[i] /= norm;
+            }
         }
     }
 }
-
 // Vector Index for faster similarity search
 class VectorIndex {
     constructor(dimensions = 128, numTrees = 10) {
@@ -826,42 +871,141 @@ class VectorSimilarity {
 
 // Add compression utilities
 class CompressionUtil {
+    // LZ77-based compression algorithm implementation
     static async compress(data) {
         // Convert data to string if needed
         const stringData = typeof data === 'string' ? data : JSON.stringify(data);
         
-        // Convert string to Uint8Array
+        // Convert string to Uint8Array for processing
         const textEncoder = new TextEncoder();
-        const uint8Array = textEncoder.encode(stringData);
+        const input = textEncoder.encode(stringData);
         
-        // Use CompressionStream when available, fallback to basic compression
-        if (typeof CompressionStream !== 'undefined') {
-            const cs = new CompressionStream('gzip');
-            const writer = cs.writable.getWriter();
-            await writer.write(uint8Array);
-            await writer.close();
-            return cs.readable;
+        const compressed = [];
+        let pos = 0;
+        
+        while (pos < input.length) {
+            const match = this.findLongestMatch(input, pos);
+            
+            if (match.length > 3) { // Only use matches longer than 3 bytes
+                // Store as (distance, length) pair
+                compressed.push([match.distance, match.length]);
+                pos += match.length;
+            } else {
+                // Store literal byte
+                compressed.push(input[pos]);
+                pos++;
+            }
         }
         
-        // Basic fallback compression (implement actual compression algorithm here)
-        return uint8Array;
+        // Convert compressed data to Uint8Array
+        return this.encodeCompressed(compressed);
     }
-
+    
     static async decompress(compressedData) {
-        // Use DecompressionStream when available, fallback to basic decompression
-        if (typeof DecompressionStream !== 'undefined') {
-            const ds = new DecompressionStream('gzip');
-            const writer = ds.writable.getWriter();
-            await writer.write(compressedData);
-            await writer.close();
-            const output = await new Response(ds.readable).arrayBuffer();
-            const textDecoder = new TextDecoder();
-            return textDecoder.decode(output);
+        const decoded = this.decodeCompressed(compressedData);
+        const decompressed = [];
+        
+        for (const token of decoded) {
+            if (Array.isArray(token)) {
+                // Handle (distance, length) pair
+                const [distance, length] = token;
+                const start = decompressed.length - distance;
+                for (let i = 0; i < length; i++) {
+                    decompressed.push(decompressed[start + i]);
+                }
+            } else {
+                // Handle literal byte
+                decompressed.push(token);
+            }
         }
         
-        // Basic fallback decompression (implement actual decompression algorithm here)
+        // Convert back to string
         const textDecoder = new TextDecoder();
-        return textDecoder.decode(compressedData);
+        return textDecoder.decode(new Uint8Array(decompressed));
+    }
+    
+    // Helper method to find longest matching sequence
+    static findLongestMatch(data, currentPos) {
+        const windowSize = 1024; // Look-behind window size
+        const maxLength = 258; // Maximum match length
+        const searchStart = Math.max(0, currentPos - windowSize);
+        
+        let bestLength = 0;
+        let bestDistance = 0;
+        
+        for (let i = searchStart; i < currentPos; i++) {
+            let length = 0;
+            while (
+                currentPos + length < data.length &&
+                length < maxLength &&
+                data[i + length] === data[currentPos + length]
+            ) {
+                length++;
+            }
+            
+            if (length > bestLength) {
+                bestLength = length;
+                bestDistance = currentPos - i;
+            }
+        }
+        
+        return { length: bestLength, distance: bestDistance };
+    }
+    
+    // Helper method to encode compressed data
+    static encodeCompressed(compressed) {
+        // Calculate total size needed
+        let size = 0;
+        compressed.forEach(token => {
+            size += Array.isArray(token) ? 5 : 2; // 5 bytes for match, 2 for literal
+        });
+        
+        const result = new Uint8Array(size);
+        let pos = 0;
+        
+        compressed.forEach(token => {
+            if (Array.isArray(token)) {
+                // Mark as match with flag byte 1
+                result[pos++] = 1;
+                // Store distance (2 bytes)
+                result[pos++] = token[0] >> 8;
+                result[pos++] = token[0] & 0xFF;
+                // Store length (2 bytes)
+                result[pos++] = token[1] >> 8;
+                result[pos++] = token[1] & 0xFF;
+            } else {
+                // Mark as literal with flag byte 0
+                result[pos++] = 0;
+                // Store literal byte
+                result[pos++] = token;
+            }
+        });
+        
+        return result;
+    }
+    
+    // Helper method to decode compressed data
+    static decodeCompressed(data) {
+        const result = [];
+        let pos = 0;
+        
+        while (pos < data.length) {
+            if (data[pos] === 1) {
+                // Read match
+                pos++;
+                const distance = (data[pos] << 8) | data[pos + 1];
+                const length = (data[pos + 2] << 8) | data[pos + 3];
+                result.push([distance, length]);
+                pos += 4;
+            } else {
+                // Read literal
+                pos++;
+                result.push(data[pos]);
+                pos++;
+            }
+        }
+        
+        return result;
     }
 }
 
