@@ -1,7 +1,709 @@
+class AsyncLock {
+    constructor() {
+        this.locks = new Map();
+        this.waiting = new Map();
+        this.debug = false;
+        this.timeout = 10000; // Default timeout of 10 seconds
+        this.metrics = {
+            acquireCount: 0,
+            timeouts: 0,
+            contentionCount: 0,
+            totalWaitTime: 0
+        };
+    }
+
+    async acquire(key, fn, timeout = this.timeout) {
+        const startTime = Date.now();
+        let lockPromise;
+        
+        try {
+            // Get or create the lock for this key
+            if (!this.locks.has(key)) {
+                this.locks.set(key, Promise.resolve());
+            }
+
+            // Get the current lock
+            const currentLock = this.locks.get(key);
+
+            // Create a new promise for this lock request
+            let resolver;
+            lockPromise = new Promise(resolve => {
+                resolver = resolve;
+            });
+
+            // Add to waiting queue
+            if (!this.waiting.has(key)) {
+                this.waiting.set(key, []);
+            }
+            this.waiting.get(key).push(resolver);
+
+            // Wait for previous lock to complete
+            await Promise.race([
+                currentLock,
+                this.createTimeout(timeout)
+            ]);
+
+            // Update metrics
+            this.metrics.acquireCount++;
+            if (this.waiting.get(key).length > 1) {
+                this.metrics.contentionCount++;
+            }
+
+            // Set this as the current lock
+            this.locks.set(key, lockPromise);
+
+            // Execute the function
+            const result = await fn();
+            return result;
+        } catch (error) {
+            if (error.name === 'LockTimeoutError') {
+                this.metrics.timeouts++;
+            }
+            throw error;
+        } finally {
+            // Calculate wait time
+            const waitTime = Date.now() - startTime;
+            this.metrics.totalWaitTime += waitTime;
+
+            // Remove from waiting queue
+            const waitingList = this.waiting.get(key);
+            if (waitingList && waitingList.length > 0) {
+                const index = waitingList.findIndex(r => r === resolver);
+                if (index !== -1) {
+                    waitingList.splice(index, 1);
+                }
+                
+                // Release the next waiting lock if any
+                if (waitingList.length > 0) {
+                    waitingList[0]();
+                } else {
+                    this.waiting.delete(key);
+                    // Only delete the lock if there are no more waiters
+                    if (this.locks.get(key) === lockPromise) {
+                        this.locks.delete(key);
+                    }
+                }
+            }
+
+            if (this.debug) {
+                console.log(`Lock ${key} released after ${waitTime}ms`);
+            }
+        }
+    }
+
+    createTimeout(timeout) {
+        return new Promise((_, reject) => {
+            setTimeout(() => {
+                const error = new Error('Lock acquisition timed out');
+                error.name = 'LockTimeoutError';
+                reject(error);
+            }, timeout);
+        });
+    }
+
+    isLocked(key) {
+        return this.locks.has(key) || (this.waiting.get(key)?.length > 0);
+    }
+
+    getWaitingCount(key) {
+        return this.waiting.get(key)?.length || 0;
+    }
+
+    async isBusy() {
+        return this.locks.size > 0 || Array.from(this.waiting.values()).some(list => list.length > 0);
+    }
+
+    getMetrics() {
+        const totalOperations = this.metrics.acquireCount || 1;
+        return {
+            ...this.metrics,
+            averageWaitTime: this.metrics.totalWaitTime / totalOperations,
+            contentionRate: this.metrics.contentionCount / totalOperations,
+            timeoutRate: this.metrics.timeouts / totalOperations,
+            activeKeys: this.locks.size,
+            waitingOperations: Array.from(this.waiting.values())
+                .reduce((sum, list) => sum + list.length, 0)
+        };
+    }
+
+    async releaseAll() {
+        // Release all locks
+        for (const [key, waitingList] of this.waiting.entries()) {
+            for (const resolver of waitingList) {
+                resolver();
+            }
+        }
+        
+        this.locks.clear();
+        this.waiting.clear();
+    }
+
+    reset() {
+        this.releaseAll();
+        this.metrics = {
+            acquireCount: 0,
+            timeouts: 0,
+            contentionCount: 0,
+            totalWaitTime: 0
+        };
+    }
+
+    setDebug(enabled) {
+        this.debug = enabled;
+    }
+
+    setTimeout(timeout) {
+        if (timeout <= 0) {
+            throw new Error('Timeout must be greater than 0');
+        }
+        this.timeout = timeout;
+    }
+
+    async acquireMultiple(keys, fn, timeout = this.timeout) {
+        // Sort keys to prevent deadlocks
+        const sortedKeys = [...new Set(keys)].sort();
+        
+        // Acquire all locks in order
+        const acquire = async (index) => {
+            if (index >= sortedKeys.length) {
+                return await fn();
+            }
+            
+            return await this.acquire(sortedKeys[index], async () => {
+                return await acquire(index + 1);
+            }, timeout);
+        };
+        
+        return await acquire(0);
+    }
+
+    async withLock(key, fn, timeout = this.timeout) {
+        return await this.acquire(key, fn, timeout);
+    }
+
+    async tryAcquire(key, fn, timeout = 0) {
+        if (this.isLocked(key)) {
+            return null;
+        }
+        
+        return await this.acquire(key, fn, timeout);
+    }
+}
+
+class LRUCache {
+    constructor(capacity) {
+        if (!Number.isInteger(capacity) || capacity <= 0) {
+            throw new Error('Cache capacity must be a positive integer');
+        }
+        this.capacity = capacity;
+        this.cache = new Map();
+        this.head = { key: null, value: null, prev: null, next: null };
+        this.tail = { key: null, value: null, prev: this.head, next: null };
+        this.head.next = this.tail;
+        this.lock = new AsyncLock();
+        this.stats = {
+            hits: 0,
+            misses: 0,
+            evictions: 0
+        };
+    }
+
+    async get(key) {
+        return await this.lock.acquire('get', () => {
+            const node = this.cache.get(key);
+            if (node) {
+                this.stats.hits++;
+                this.moveToFront(node);
+                return node.value;
+            }
+            this.stats.misses++;
+            return undefined;
+        });
+    }
+
+    async set(key, value) {
+        return await this.lock.acquire('set', () => {
+            const existingNode = this.cache.get(key);
+
+            if (existingNode) {
+                // Update existing node
+                existingNode.value = value;
+                this.moveToFront(existingNode);
+                return;
+            }
+
+            // Create new node
+            const newNode = {
+                key,
+                value,
+                prev: this.head,
+                next: this.head.next
+            };
+
+            // Add to doubly-linked list
+            this.head.next.prev = newNode;
+            this.head.next = newNode;
+
+            // Add to cache
+            this.cache.set(key, newNode);
+
+            // Check capacity
+            if (this.cache.size > this.capacity) {
+                this.evictOldest();
+            }
+        });
+    }
+
+    async delete(key) {
+        return await this.lock.acquire('delete', () => {
+            const node = this.cache.get(key);
+            if (node) {
+                this.removeNode(node);
+                this.cache.delete(key);
+                return true;
+            }
+            return false;
+        });
+    }
+
+    async clear() {
+        return await this.lock.acquire('clear', () => {
+            this.cache.clear();
+            this.head.next = this.tail;
+            this.tail.prev = this.head;
+            this.resetStats();
+        });
+    }
+
+    async evictOldest() {
+        return await this.lock.acquire('evict', () => {
+            if (this.tail.prev === this.head) {
+                return false; // Cache is empty
+            }
+
+            const oldestNode = this.tail.prev;
+            this.removeNode(oldestNode);
+            this.cache.delete(oldestNode.key);
+            this.stats.evictions++;
+            return true;
+        });
+    }
+
+    moveToFront(node) {
+        // Remove from current position
+        this.removeNode(node);
+
+        // Add to front
+        node.prev = this.head;
+        node.next = this.head.next;
+        this.head.next.prev = node;
+        this.head.next = node;
+    }
+
+    removeNode(node) {
+        node.prev.next = node.next;
+        node.next.prev = node.prev;
+    }
+
+    size() {
+        return this.cache.size;
+    }
+
+    has(key) {
+        return this.cache.has(key);
+    }
+
+    *entries() {
+        let node = this.head.next;
+        while (node !== this.tail) {
+            yield [node.key, node.value];
+            node = node.next;
+        }
+    }
+
+    *keys() {
+        let node = this.head.next;
+        while (node !== this.tail) {
+            yield node.key;
+            node = node.next;
+        }
+    }
+
+    *values() {
+        let node = this.head.next;
+        while (node !== this.tail) {
+            yield node.value;
+            node = node.next;
+        }
+    }
+
+    async getStats() {
+        return await this.lock.acquire('stats', () => ({
+            ...this.stats,
+            size: this.cache.size,
+            capacity: this.capacity,
+            hitRate: this.calculateHitRate(),
+            evictionRate: this.calculateEvictionRate()
+        }));
+    }
+
+    calculateHitRate() {
+        const total = this.stats.hits + this.stats.misses;
+        return total === 0 ? 0 : this.stats.hits / total;
+    }
+
+    calculateEvictionRate() {
+        const total = this.stats.hits + this.stats.misses;
+        return total === 0 ? 0 : this.stats.evictions / total;
+    }
+
+    resetStats() {
+        this.stats = {
+            hits: 0,
+            misses: 0,
+            evictions: 0
+        };
+    }
+
+    async optimize() {
+        return await this.lock.acquire('optimize', () => {
+            // Analyze access patterns and adjust capacity if needed
+            const hitRate = this.calculateHitRate();
+            const evictionRate = this.calculateEvictionRate();
+
+            // If hit rate is high and eviction rate is low, we might be over-provisioned
+            if (hitRate > 0.9 && evictionRate < 0.1) {
+                this.capacity = Math.max(Math.floor(this.capacity * 0.8), 1);
+                while (this.cache.size > this.capacity) {
+                    this.evictOldest();
+                }
+            }
+
+            // If hit rate is low and eviction rate is high, we might need more capacity
+            if (hitRate < 0.5 && evictionRate > 0.5) {
+                this.capacity = Math.min(Math.floor(this.capacity * 1.5), Number.MAX_SAFE_INTEGER);
+            }
+
+            return {
+                newCapacity: this.capacity,
+                hitRate,
+                evictionRate
+            };
+        });
+    }
+
+    async peek(key) {
+        return await this.lock.acquire('peek', () => {
+            const node = this.cache.get(key);
+            return node ? node.value : undefined;
+        });
+    }
+
+    async peekOldest() {
+        return await this.lock.acquire('peekOldest', () => {
+            if (this.tail.prev === this.head) {
+                return undefined;
+            }
+            return {
+                key: this.tail.prev.key,
+                value: this.tail.prev.value
+            };
+        });
+    }
+
+    async peekNewest() {
+        return await this.lock.acquire('peekNewest', () => {
+            if (this.head.next === this.tail) {
+                return undefined;
+            }
+            return {
+                key: this.head.next.key,
+                value: this.head.next.value
+            };
+        });
+    }
+
+    [Symbol.iterator]() {
+        return this.entries();
+    }
+
+    async destroy() {
+        return await this.lock.acquire('destroy', () => {
+            this.clear();
+            this.head = null;
+            this.tail = null;
+            this.cache = null;
+            this.stats = null;
+        });
+    }
+}
+
+class ThoughtError extends Error {
+    constructor(code, message, context = {}) {
+        // Call parent constructor
+        super(message);
+
+        // Maintain proper stack trace
+        if (Error.captureStackTrace) {
+            Error.captureStackTrace(this, ThoughtError);
+        }
+
+        // Custom properties
+        this.name = 'ThoughtError';
+        this.code = code;
+        this.timestamp = Date.now();
+        this.context = this.sanitizeContext(context);
+        this.severity = this.calculateSeverity(code);
+        this.retryable = this.isRetryable(code);
+    }
+
+    // Predefined error codes and their properties
+    static ErrorCodes = {
+        // Memory-related errors
+        MemoryLimitExceeded: {
+            severity: 'high',
+            retryable: false,
+            category: 'resource'
+        },
+        MemoryAllocationFailed: {
+            severity: 'high',
+            retryable: true,
+            category: 'resource'
+        },
+
+        // Processing errors
+        InvalidInput: {
+            severity: 'medium',
+            retryable: false,
+            category: 'validation'
+        },
+        ProcessingFailed: {
+            severity: 'medium',
+            retryable: true,
+            category: 'operation'
+        },
+        
+        // System errors
+        SystemOverload: {
+            severity: 'high',
+            retryable: true,
+            category: 'system'
+        },
+        InternalError: {
+            severity: 'high',
+            retryable: false,
+            category: 'system'
+        },
+
+        // Data errors
+        InvalidData: {
+            severity: 'medium',
+            retryable: false,
+            category: 'data'
+        },
+        DataNotFound: {
+            severity: 'low',
+            retryable: false,
+            category: 'data'
+        },
+        DataCorruption: {
+            severity: 'high',
+            retryable: false,
+            category: 'data'
+        },
+
+        // Operation errors
+        OperationTimeout: {
+            severity: 'medium',
+            retryable: true,
+            category: 'operation'
+        },
+        OperationCancelled: {
+            severity: 'low',
+            retryable: true,
+            category: 'operation'
+        },
+        ConcurrencyError: {
+            severity: 'medium',
+            retryable: true,
+            category: 'operation'
+        },
+
+        // State errors
+        InvalidState: {
+            severity: 'medium',
+            retryable: false,
+            category: 'state'
+        },
+        StateTransitionFailed: {
+            severity: 'medium',
+            retryable: true,
+            category: 'state'
+        },
+
+        // Configuration errors
+        InvalidConfiguration: {
+            severity: 'high',
+            retryable: false,
+            category: 'config'
+        },
+        ConfigurationMissing: {
+            severity: 'high',
+            retryable: false,
+            category: 'config'
+        }
+    };
+
+    calculateSeverity(code) {
+        return ThoughtError.ErrorCodes[code]?.severity || 'medium';
+    }
+
+    isRetryable(code) {
+        return ThoughtError.ErrorCodes[code]?.retryable ?? false;
+    }
+
+    getCategory() {
+        return ThoughtError.ErrorCodes[this.code]?.category || 'unknown';
+    }
+
+    sanitizeContext(context) {
+        const sanitized = {};
+        
+        for (const [key, value] of Object.entries(context)) {
+            // Skip null or undefined values
+            if (value == null) continue;
+
+            // Handle different types of values
+            if (typeof value === 'function') {
+                sanitized[key] = '[Function]';
+            } else if (value instanceof Error) {
+                sanitized[key] = {
+                    name: value.name,
+                    message: value.message,
+                    stack: value.stack
+                };
+            } else if (ArrayBuffer.isView(value)) {
+                sanitized[key] = `[${value.constructor.name}]`;
+            } else if (typeof value === 'object') {
+                try {
+                    // Attempt to safely stringify objects
+                    sanitized[key] = JSON.parse(JSON.stringify(value));
+                } catch {
+                    sanitized[key] = '[Complex Object]';
+                }
+            } else {
+                sanitized[key] = value;
+            }
+        }
+
+        return sanitized;
+    }
+
+    toJSON() {
+        return {
+            name: this.name,
+            code: this.code,
+            message: this.message,
+            timestamp: this.timestamp,
+            severity: this.severity,
+            category: this.getCategory(),
+            retryable: this.retryable,
+            context: this.context,
+            stack: this.stack
+        };
+    }
+
+    toString() {
+        return `${this.name}[${this.code}]: ${this.message} (Severity: ${this.severity}, Category: ${this.getCategory()})`;
+    }
+
+    static isThoughtError(error) {
+        return error instanceof ThoughtError;
+    }
+
+    static fromError(error, code = 'InternalError', additionalContext = {}) {
+        const context = {
+            originalError: {
+                name: error.name,
+                message: error.message,
+                stack: error.stack
+            },
+            ...additionalContext
+        };
+
+        return new ThoughtError(code, error.message, context);
+    }
+
+    static wrapError(error, code = 'InternalError', message = null, additionalContext = {}) {
+        if (ThoughtError.isThoughtError(error)) {
+            // If it's already a ThoughtError, just add additional context
+            error.context = {
+                ...error.context,
+                ...additionalContext
+            };
+            return error;
+        }
+
+        return ThoughtError.fromError(error, code, additionalContext);
+    }
+
+    getErrorDetails() {
+        return {
+            code: this.code,
+            severity: this.severity,
+            category: this.getCategory(),
+            retryable: this.retryable,
+            timestamp: this.timestamp,
+            message: this.message,
+            context: this.context
+        };
+    }
+
+    isOfCategory(category) {
+        return this.getCategory() === category;
+    }
+
+    shouldRetry(attemptsMade = 0, maxAttempts = 3) {
+        if (!this.retryable) return false;
+        if (attemptsMade >= maxAttempts) return false;
+        
+        // Additional retry logic based on error category
+        switch (this.getCategory()) {
+            case 'resource':
+                return attemptsMade < 2; // Less retry attempts for resource errors
+            case 'operation':
+                return attemptsMade < maxAttempts;
+            case 'system':
+                return attemptsMade < maxAttempts - 1;
+            default:
+                return this.retryable && attemptsMade < maxAttempts;
+        }
+    }
+
+    getRetryDelay(attemptsMade = 0) {
+        // Exponential backoff with jitter
+        const baseDelay = 1000; // 1 second
+        const maxDelay = 30000; // 30 seconds
+        
+        let delay = baseDelay * Math.pow(2, attemptsMade);
+        delay = Math.min(delay, maxDelay);
+        
+        // Add jitter (±25%)
+        const jitter = delay * 0.25;
+        delay += Math.random() * jitter * 2 - jitter;
+        
+        return Math.floor(delay);
+    }
+}
+
 // Enhanced Memory Management System
 class EnhancedMemorySystem {
     constructor(config = {}) {
-        this.shortTermMemory = new Map();
+        this.shortTermMemory = new HybridStorage({
+            dbName: 'shortTermMemory',
+            maxMemoryItems: config.shortTermLimit || 10000,
+            storeName: 'shortTerm'
+        });
         this.workingMemory = new LRUCache(config.workingMemorySize || 1000);
         this.vectorStore = new EnhancedVectorStore();
         this.memoryLimits = {
@@ -22,9 +724,11 @@ class EnhancedMemorySystem {
 
         this.lastCleanupAttempt = null;
         this.isCleaningUp = false;
+        this.cleanupLock = new AsyncLock();
+        this.#lock = new AsyncLock();
     }
 
-    #lock = new AsyncLock();
+    #lock
 
     async releaseResources() {
         try {
@@ -36,6 +740,9 @@ class EnhancedMemorySystem {
 
             // Additional resource cleanup as needed
             await this.vectorStore?.releaseResources();
+            
+            // Release shortTermMemory resources
+            await this.shortTermMemory.destroy();
         } catch (error) {
             console.error('Error releasing resources:', error);
             throw new Error('Failed to release resources: ' + error.message);
@@ -82,7 +789,7 @@ class EnhancedMemorySystem {
             await this.workingMemory.clear();
 
             // Clear short-term memory
-            this.shortTermMemory.clear();
+            await this.shortTermMemory.destroy();
 
             // Release any held resources
             await this.releaseResources();
@@ -96,28 +803,22 @@ class EnhancedMemorySystem {
         const now = Date.now();
 
         try {
-            // Cleanup short-term memory with error handling
-            for (const [key, value] of this.shortTermMemory) {
-                try {
-                    if (now - value.metadata.timestamp > this.memoryLimits.shortTerm) {
-                        await this.safeDelete(key, 'shortTerm');
-                    }
-                } catch (error) {
-                    console.error(`Error cleaning up key ${key}:`, error);
-                    // Continue with other items despite error
-                }
-            }
+            // Cleanup short-term memory
+            await this.shortTermMemory.vacuum();
 
             // Enforce working memory size limit
             while (this.workingMemory.size() > this.memoryLimits.working) {
                 await this.workingMemory.evictOldest();
             }
 
-            // Trigger vacuum on vector store with error handling
+            // Trigger vacuum on vector store
             await this.vectorStore.vacuum().catch(error => {
                 console.error('Error during vector store vacuum:', error);
-                throw error; // Re-throw to be caught by outer try-catch
+                throw error;
             });
+
+            // Optimize storage if needed
+            await this.shortTermMemory.optimize();
 
         } catch (error) {
             console.error('Error during cleanup:', error);
@@ -129,7 +830,7 @@ class EnhancedMemorySystem {
         try {
             switch (memoryType) {
                 case 'shortTerm':
-                    this.shortTermMemory.delete(key);
+                    await this.shortTermMemory.delete(key);
                     break;
                 case 'working':
                     await this.workingMemory.delete(key);
@@ -170,9 +871,13 @@ class EnhancedMemorySystem {
 
             switch (type) {
                 case 'shortTerm':
-                    this.shortTermMemory.set(key, {
+                    await this.shortTermMemory.set(key, {
                         data: compressedData,
                         metadata: enhancedMetadata
+                    }, {
+                        priority: metadata.priority,
+                        compression: true,
+                        tags: metadata.tags
                     });
                     break;
                 default:
@@ -180,6 +885,23 @@ class EnhancedMemorySystem {
             }
 
             return enhancedMetadata;
+        });
+    }
+
+    async retrieve(key, type = 'shortTerm') {
+        return await this.#lock.acquire('retrieve', async () => {
+            let result;
+            switch (type) {
+                case 'shortTerm':
+                    result = await this.shortTermMemory.get(key);
+                    if (result) {
+                        return await this.decompress(result.data, result.metadata);
+                    }
+                    break;
+                default:
+                    throw new ThoughtError('InvalidMemoryType', `Unknown memory type: ${type}`);
+            }
+            return null;
         });
     }
 
@@ -212,8 +934,39 @@ class EnhancedMemorySystem {
     }
 
     async decompress(data, metadata) {
-        // Implement actual decompression logic here
-        return data;
+        if (!this.aiConfig.compressionModel) {
+            return data;
+        }
+
+        try {
+            const response = await fetch(`${this.aiConfig.endpoint}/decompress`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${this.aiConfig.apiKey}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    data: data,
+                    metadata: metadata,
+                    model: this.aiConfig.compressionModel
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error(`Decompression API request failed with status ${response.status}`);
+            }
+
+            const decompressed = await response.json();
+
+            // Validate decompressed data
+            if (!decompressed || typeof decompressed !== 'object') {
+                throw new Error('Invalid decompressed data format');
+            }
+
+            return decompressed;
+        } catch (error) {
+            throw new Error('Decompression failed', { cause: error });
+        }
     }
 
     calculateSize(data) {
@@ -225,356 +978,29 @@ class EnhancedMemorySystem {
     }
 
     async getUsageMetrics() {
+        const shortTermMetrics = await this.shortTermMemory.getMetrics();
+        
         return {
             shortTerm: {
-                size: this.shortTermMemory.size,
-                capacityUsed: this.shortTermMemory.size / this.memoryLimits.shortTerm
+                size: shortTermMetrics.totalItems,
+                capacityUsed: shortTermMetrics.totalSize / this.memoryLimits.shortTerm,
+                hitRate: shortTermMetrics.hitRate,
+                averageAccessTime: shortTermMetrics.averageAccessTime
             },
             working: {
                 size: this.workingMemory.size(),
                 capacityUsed: this.workingMemory.size() / this.memoryLimits.working
             },
             vector: await this.vectorStore.getUsageMetrics(),
-            lastCleanup: this.lastCleanupTime,
-            totalEntries: this.shortTermMemory.size +
+            lastCleanup: this.lastCleanupAttempt,
+            totalEntries: shortTermMetrics.totalItems +
                 this.workingMemory.size() +
                 await this.vectorStore.getEntryCount()
         };
     }
-}
 
-class BaseDebugSystem {
-    constructor() {
-        this.debugLevel = 'info';
-        this.logBuffer = [];
-        this.maxBufferSize = 1000;
-    }
-
-    async inspectThought(thought) {
-        if (!thought || !thought.id) {
-            throw new Error('Invalid thought object');
-        }
-
-        return {
-            id: thought.id,
-            type: thought.type,
-            timestamp: Date.now(),
-            basic_metrics: await this.getBasicMetrics(thought)
-        };
-    }
-
-    async getBasicMetrics(thought) {
-        try {
-            const executionStart = performance.now();
-            await thought.execute();
-            const executionTime = performance.now() - executionStart;
-
-            return {
-                executionTime,
-                memoryUsage: process.memoryUsage().heapUsed,
-                status: 'completed'
-            };
-        } catch (error) {
-            return {
-                executionTime: 0,
-                memoryUsage: 0,
-                status: 'failed',
-                error: error.message
-            };
-        }
-    }
-
-    log(level, message, context = {}) {
-        const logEntry = {
-            timestamp: Date.now(),
-            level,
-            message,
-            context
-        };
-
-        this.logBuffer.push(logEntry);
-        if (this.logBuffer.length > this.maxBufferSize) {
-            this.logBuffer.shift();
-        }
-
-        return logEntry;
-    }
-
-    clearLogs() {
-        this.logBuffer = [];
-    }
-
-    getLogsByLevel(level) {
-        return this.logBuffer.filter(entry => entry.level === level);
-    }
-}
-
-class EnhancedDebugSystem extends BaseDebugSystem {
-    constructor(config = {}) {
-        super();
-        this.logs = new Map();
-        this.breakpoints = new Set();
-        this.metrics = new MetricsCollector();
-        this.alertThresholds = config.alertThresholds || {
-            memory: 0.8,    // 80% of available memory
-            cpu: 0.9,       // 90% CPU usage
-            time: 5000,     // 5 seconds
-            errors: 10      // Number of errors per minute
-        };
-        this.monitoringIntervalId = null;
-        this.errorCount = new Map(); // Track errors per minute
-        this.debugHooks = new Map(); // Custom debug hooks
-        this.setupMonitoring();
-    }
-
-    setupMonitoring() {
-        if (this.monitoringIntervalId) {
-            clearInterval(this.monitoringIntervalId);
-        }
-        this.monitoringIntervalId = setInterval(() => this.checkSystemHealth(), 5000);
-    }
-
-    destroy() {
-        if (this.monitoringIntervalId) {
-            clearInterval(this.monitoringIntervalId);
-            this.monitoringIntervalId = null;
-        }
-        this.clearLogs();
-        this.breakpoints.clear();
-        this.errorCount.clear();
-        this.debugHooks.clear();
-    }
-
-    async checkSystemHealth() {
-        try {
-            const metrics = await this.metrics.collect();
-            const alerts = [];
-
-            // Check memory usage
-            if (metrics.memory.heapUsedPercentage > this.alertThresholds.memory) {
-                alerts.push({
-                    type: 'MemoryAlert',
-                    value: metrics.memory.heapUsedPercentage,
-                    threshold: this.alertThresholds.memory,
-                    timestamp: Date.now()
-                });
-            }
-
-            // Check CPU usage
-            if (metrics.cpu.percentage > this.alertThresholds.cpu) {
-                alerts.push({
-                    type: 'CPUAlert',
-                    value: metrics.cpu.percentage,
-                    threshold: this.alertThresholds.cpu,
-                    timestamp: Date.now()
-                });
-            }
-
-            // Clean up old error counts
-            const oneMinuteAgo = Date.now() - 60000;
-            for (const [key, value] of this.errorCount) {
-                if (value.timestamp < oneMinuteAgo) {
-                    this.errorCount.delete(key);
-                }
-            }
-
-            if (alerts.length > 0) {
-                this.handleAlerts(alerts);
-            }
-
-            // Store health check results
-            this.logs.set('healthCheck', {
-                timestamp: Date.now(),
-                metrics,
-                alerts
-            });
-        } catch (error) {
-            this.log('error', 'Health check failed', { error: error.message });
-        }
-    }
-
-    handleAlerts(alerts) {
-        for (const alert of alerts) {
-            this.log('alert', `System alert: ${alert.type}`, alert);
-
-            // Execute any registered alert handlers
-            const handler = this.debugHooks.get(alert.type);
-            if (handler) {
-                try {
-                    handler(alert);
-                } catch (error) {
-                    this.log('error', 'Alert handler failed', {
-                        alertType: alert.type,
-                        error: error.message
-                    });
-                }
-            }
-        }
-    }
-
-    async inspectThought(thought) {
-        const baseInspection = await super.inspectThought(thought);
-
-        try {
-            const enhancedInspection = {
-                ...baseInspection,
-                memory: await this.metrics.getMemoryProfile(thought),
-                traces: await this.collectTraces(thought),
-                resourceUsage: await this.metrics.getResourceUsage(thought),
-                executionGraph: this.generateExecutionGraph(thought),
-                dependencies: await this.analyzeDependencies(thought)
-            };
-
-            this.logs.set(`thought_${thought.id}`, enhancedInspection);
-            return enhancedInspection;
-        } catch (error) {
-            this.log('error', 'Thought inspection failed', {
-                thoughtId: thought.id,
-                error: error.message
-            });
-            return baseInspection;
-        }
-    }
-
-    async collectTraces(thought) {
-        return {
-            executionPath: this.captureExecutionPath(thought),
-            functionCalls: await this.traceFunctionCalls(thought),
-            resourceAccess: this.trackResourceAccess(thought),
-            timing: this.measureExecutionTimes(thought)
-        };
-    }
-
-    captureExecutionPath(thought) {
-        const path = [];
-        let currentNode = thought;
-
-        while (currentNode) {
-            path.push({
-                id: currentNode.id,
-                type: currentNode.type,
-                timestamp: currentNode.timestamp
-            });
-            currentNode = currentNode.parent;
-        }
-
-        return path;
-    }
-
-    async traceFunctionCalls(thought) {
-        const calls = [];
-        const handler = {
-            apply: (target, thisArg, args) => {
-                const start = performance.now();
-                try {
-                    const result = target.apply(thisArg, args);
-                    const duration = performance.now() - start;
-
-                    calls.push({
-                        function: target.name,
-                        arguments: args,
-                        duration,
-                        status: 'success'
-                    });
-
-                    return result;
-                } catch (error) {
-                    const duration = performance.now() - start;
-                    calls.push({
-                        function: target.name,
-                        arguments: args,
-                        duration,
-                        status: 'error',
-                        error: error.message
-                    });
-                    throw error;
-                }
-            }
-        };
-
-        return calls;
-    }
-
-    trackResourceAccess(thought) {
-        return {
-            memory: this.getMemoryAccess(thought),
-            storage: this.getStorageAccess(thought),
-            network: this.getNetworkAccess(thought)
-        };
-    }
-
-    measureExecutionTimes(thought) {
-        return {
-            total: 0,
-            phases: [],
-            bottlenecks: []
-        };
-    }
-
-    setBreakpoint(thoughtId, condition) {
-        this.breakpoints.set(thoughtId, condition);
-    }
-
-    removeBreakpoint(thoughtId) {
-        this.breakpoints.delete(thoughtId);
-    }
-
-    registerDebugHook(event, handler) {
-        if (typeof handler !== 'function') {
-            throw new Error('Debug hook handler must be a function');
-        }
-        this.debugHooks.set(event, handler);
-    }
-
-    getDebugSnapshot() {
-        return {
-            timestamp: Date.now(),
-            logs: Array.from(this.logs.entries()),
-            metrics: this.metrics.getLatestMetrics(),
-            breakpoints: Array.from(this.breakpoints),
-            errorCounts: Array.from(this.errorCount.entries())
-        };
-    }
-
-    generateExecutionGraph(thought) {
-        // Implementation for generating execution graph
-        return {
-            nodes: [],
-            edges: []
-        };
-    }
-
-    async analyzeDependencies(thought) {
-        // Implementation for analyzing dependencies
-        return {
-            direct: [],
-            indirect: [],
-            circular: []
-        };
-    }
-
-    getMemoryAccess(thought) {
-        return {
-            reads: [],
-            writes: [],
-            allocations: []
-        };
-    }
-
-    getStorageAccess(thought) {
-        return {
-            reads: [],
-            writes: [],
-            deletes: []
-        };
-    }
-
-    getNetworkAccess(thought) {
-        return {
-            requests: [],
-            responses: [],
-            errors: []
-        };
+    async cleanupTemporaryResources() {
+        await CompressionUtil.cleanupTemporaryResources();
     }
 }
 
@@ -817,38 +1243,264 @@ class EnhancedVectorStore {
 }
 // Vector Index for faster similarity search
 class VectorIndex {
-    constructor(dimensions = 128, numTrees = 10) {
+    constructor(dimensions = 128, numTrees = 10, maxLeafSize = 10) {
         this.dimensions = dimensions;
         this.numTrees = numTrees;
-        this.trees = Array.from({ length: numTrees }, () => new RandomProjectionTree());
+        this.maxLeafSize = maxLeafSize;
+        this.trees = [];
+        this.initializeTrees();
+        this.vectorCache = new Map();
+        this.lookupTable = new Map();
+        this.indexLock = new AsyncLock();
+        this.maintenanceInterval = null;
+        this.lastMaintenance = Date.now();
     }
 
-    async add(key, embedding) {
-        for (const tree of this.trees) {
-            await tree.insert(key, embedding);
+    async initializeTrees() {
+        try {
+            this.trees = Array.from({ length: this.numTrees }, () => 
+                new RandomProjectionTree(this.dimensions, this.maxLeafSize)
+            );
+        } catch (error) {
+            console.error('Failed to initialize trees:', error);
+            throw new Error('Vector index initialization failed: ' + error.message);
         }
     }
 
-    async search(queryEmbedding, limit) {
-        const results = new Map();
+    async add(key, embedding) {
+        return await this.indexLock.acquire('add', async () => {
+            try {
+                // Validate input
+                if (!key || !embedding) {
+                    throw new Error('Invalid input: key and embedding are required');
+                }
+                if (embedding.length !== this.dimensions) {
+                    throw new Error(`Invalid embedding dimensions: expected ${this.dimensions}, got ${embedding.length}`);
+                }
 
-        // Search in all trees
-        await Promise.all(this.trees.map(async tree => {
-            const treeResults = await tree.search(queryEmbedding, limit);
-            treeResults.forEach(key => {
-                results.set(key, (results.get(key) || 0) + 1);
-            });
+                // Normalize the embedding
+                const normalizedEmbedding = await this.normalizeVector(embedding);
+
+                // Add to all trees
+                await Promise.all(this.trees.map(tree => 
+                    tree.insert(key, normalizedEmbedding)
+                ));
+
+                // Update lookup table
+                this.lookupTable.set(key, {
+                    timestamp: Date.now(),
+                    embedding: normalizedEmbedding
+                });
+
+                // Cache the normalized vector
+                this.vectorCache.set(key, normalizedEmbedding);
+
+                return true;
+            } catch (error) {
+                console.error('Error adding vector:', error);
+                throw new Error('Failed to add vector: ' + error.message);
+            }
+        });
+    }
+
+    async search(queryEmbedding, limit = 5, similarityThreshold = 0.5) {
+        try {
+            // Validate input
+            if (!queryEmbedding || queryEmbedding.length !== this.dimensions) {
+                throw new Error('Invalid query embedding');
+            }
+
+            // Normalize query vector
+            const normalizedQuery = await this.normalizeVector(queryEmbedding);
+
+            // Search in all trees
+            const results = new Map();
+            await Promise.all(this.trees.map(async tree => {
+                const treeResults = await tree.search(normalizedQuery, limit * 2);
+                treeResults.forEach(key => {
+                    results.set(key, (results.get(key) || 0) + 1);
+                });
+            }));
+
+            // Calculate actual similarities for top candidates
+            const similarities = await Promise.all(
+                Array.from(results.entries()).map(async ([key, count]) => {
+                    const storedVector = this.vectorCache.get(key);
+                    if (!storedVector) return null;
+                    
+                    const similarity = await this.calculateCosineSimilarity(
+                        normalizedQuery,
+                        storedVector
+                    );
+                    return { key, similarity, count };
+                })
+            );
+
+            // Filter, sort and return top results
+            return similarities
+                .filter(result => result && result.similarity >= similarityThreshold)
+                .sort((a, b) => {
+                    // Primary sort by similarity
+                    const simDiff = b.similarity - a.similarity;
+                    if (Math.abs(simDiff) > 0.01) return simDiff;
+                    // Secondary sort by tree occurrence count
+                    return b.count - a.count;
+                })
+                .slice(0, limit)
+                .map(result => ({
+                    key: result.key,
+                    similarity: result.similarity
+                }));
+
+        } catch (error) {
+            console.error('Error during vector search:', error);
+            throw new Error('Vector search failed: ' + error.message);
+        }
+    }
+
+    async delete(key) {
+        return await this.indexLock.acquire('delete', async () => {
+            try {
+                // Remove from all trees
+                await Promise.all(this.trees.map(tree => tree.delete(key)));
+
+                // Clear from cache and lookup table
+                this.vectorCache.delete(key);
+                this.lookupTable.delete(key);
+
+                return true;
+            } catch (error) {
+                console.error('Error deleting vector:', error);
+                throw new Error('Failed to delete vector: ' + error.message);
+            }
+        });
+    }
+
+    async update(key, newEmbedding) {
+        return await this.indexLock.acquire('update', async () => {
+            try {
+                await this.delete(key);
+                return await this.add(key, newEmbedding);
+            } catch (error) {
+                console.error('Error updating vector:', error);
+                throw new Error('Failed to update vector: ' + error.message);
+            }
+        });
+    }
+
+    async normalize(embedding) {
+        return await this.normalizeVector(embedding);
+    }
+
+    async maintenance() {
+        return await this.indexLock.acquire('maintenance', async () => {
+            try {
+                // Rebuild trees that are unbalanced
+                await this.rebuildUnbalancedTrees();
+
+                // Clean up old entries
+                await this.cleanupOldEntries();
+
+                // Update maintenance timestamp
+                this.lastMaintenance = Date.now();
+            } catch (error) {
+                console.error('Error during maintenance:', error);
+                throw new Error('Maintenance failed: ' + error.message);
+            }
+        });
+    }
+
+    async rebuildUnbalancedTrees() {
+        const unbalancedTrees = this.trees.filter(tree => tree.needsRebalancing());
+        if (unbalancedTrees.length === 0) return;
+
+        // Get all vectors
+        const vectors = Array.from(this.lookupTable.entries()).map(([key, data]) => ({
+            key,
+            embedding: data.embedding
         }));
 
-        // Sort by frequency of appearance in trees
-        return Array.from(results.entries())
-            .sort((a, b) => b[1] - a[1])
-            .map(([key]) => key)
-            .slice(0, limit);
+        // Rebuild unbalanced trees
+        await Promise.all(unbalancedTrees.map(async tree => {
+            const newTree = new RandomProjectionTree(this.dimensions, this.maxLeafSize);
+            for (const vector of vectors) {
+                await newTree.insert(vector.key, vector.embedding);
+            }
+            const treeIndex = this.trees.indexOf(tree);
+            this.trees[treeIndex] = newTree;
+        }));
+    }
+
+    async cleanupOldEntries() {
+        const now = Date.now();
+        const maxAge = 30 * 24 * 60 * 60 * 1000; // 30 days
+
+        const oldKeys = Array.from(this.lookupTable.entries())
+            .filter(([_, data]) => now - data.timestamp > maxAge)
+            .map(([key]) => key);
+
+        await Promise.all(oldKeys.map(key => this.delete(key)));
+    }
+
+    async normalizeVector(vector) {
+        let norm = 0;
+        for (let i = 0; i < vector.length; i++) {
+            norm += vector[i] * vector[i];
+        }
+        norm = Math.sqrt(norm);
+
+        if (norm === 0) {
+            throw new Error('Cannot normalize zero vector');
+        }
+
+        return new Float32Array(vector.map(v => v / norm));
+    }
+
+    async calculateCosineSimilarity(a, b) {
+        let dotProduct = 0;
+        for (let i = 0; i < a.length; i++) {
+            dotProduct += a[i] * b[i];
+        }
+        return Math.max(-1, Math.min(1, dotProduct));
+    }
+
+    async destroy() {
+        try {
+            // Clear maintenance interval if exists
+            if (this.maintenanceInterval) {
+                clearInterval(this.maintenanceInterval);
+                this.maintenanceInterval = null;
+            }
+
+            // Destroy all trees
+            await Promise.all(this.trees.map(tree => tree.destroy()));
+
+            // Clear caches
+            this.vectorCache.clear();
+            this.lookupTable.clear();
+
+            // Clear arrays
+            this.trees = [];
+
+            return true;
+        } catch (error) {
+            console.error('Error destroying vector index:', error);
+            throw new Error('Failed to destroy vector index: ' + error.message);
+        }
+    }
+
+    async getStats() {
+        return {
+            numTrees: this.trees.length,
+            numVectors: this.lookupTable.size,
+            dimensions: this.dimensions,
+            lastMaintenance: this.lastMaintenance,
+            cacheSize: this.vectorCache.size,
+            treeStats: await Promise.all(this.trees.map(tree => tree.getStats()))
+        };
     }
 }
 
-// Enhanced Pattern Optimizer with improved parallelization
 class EnhancedPatternOptimizer {
     constructor(performanceTracker) {
         this.performanceTracker = performanceTracker;
@@ -970,6 +1622,44 @@ class EnhancedPatternOptimizer {
         return this.baselineOptimization(thoughtChain);
     }
 
+    async baselineOptimization(thoughtChain) {
+        try {
+            // Build dependency graph
+            const graph = this.buildDependencyGraph(thoughtChain);
+            
+            // Find all possible execution paths
+            const paths = this.findExecutionPaths(graph);
+            
+            // Optimize each path
+            const optimizedPaths = await Promise.all(
+                paths.map(path => this.optimizePath(path))
+            );
+
+            // Analyze metrics for each optimized path
+            const pathMetrics = await Promise.all(
+                optimizedPaths.map(async path => ({
+                    path,
+                    metrics: await this.calculatePathMetrics(path)
+                }))
+            );
+
+            // Select best path based on metrics
+            const bestPath = this.selectOptimalPath(pathMetrics);
+            
+            // Apply performance patterns
+            const patternOptimizedPath = await this.applyPerformancePatterns(bestPath);
+            
+            // Validate final optimization
+            await this.validateOptimization(patternOptimizedPath, thoughtChain);
+            
+            return patternOptimizedPath;
+        } catch (error) {
+            console.error('Baseline optimization failed:', error);
+            // Return original chain if optimization fails
+            return thoughtChain;
+        }
+    }
+
     buildDependencyGraph(thoughtChain) {
         const graph = new Map();
 
@@ -1077,6 +1767,105 @@ class EnhancedPatternOptimizer {
             return (currentTotal[resource] || 0) + (newMetrics[resource] || 0) <= limit;
         });
     }
+
+    async calculatePathMetrics(path) {
+        const metrics = {
+            totalExecutionTime: 0,
+            peakMemoryUsage: 0,
+            cpuUtilization: 0,
+            resourceEfficiency: 0
+        };
+
+        for (const thought of path) {
+            const thoughtMetrics = await this.analyzeThought(thought);
+            metrics.totalExecutionTime += thoughtMetrics.executionTime || 0;
+            metrics.peakMemoryUsage = Math.max(metrics.peakMemoryUsage, thoughtMetrics.memoryUsage || 0);
+            metrics.cpuUtilization = Math.max(metrics.cpuUtilization, thoughtMetrics.cpuUsage || 0);
+        }
+
+        // Calculate resource efficiency score
+        metrics.resourceEfficiency = this.calculateEfficiencyScore(metrics);
+        return metrics;
+    }
+
+    calculateEfficiencyScore(metrics) {
+        const weights = {
+            executionTime: 0.4,
+            memoryUsage: 0.3,
+            cpuUtilization: 0.3
+        };
+
+        return (
+            (1 / (metrics.totalExecutionTime + 1)) * weights.executionTime +
+            (1 / (metrics.peakMemoryUsage + 1)) * weights.memoryUsage +
+            (1 / (metrics.cpuUtilization + 1)) * weights.cpuUtilization
+        );
+    }
+
+    selectOptimalPath(pathMetrics) {
+        return pathMetrics.reduce((best, current) => {
+            if (!best || current.metrics.resourceEfficiency > best.metrics.resourceEfficiency) {
+                return current;
+            }
+            return best;
+        }).path;
+    }
+
+    async applyPerformancePatterns(path) {
+        const optimizedPath = [...path];
+        
+        // Apply known optimization patterns
+        for (const [patternName, pattern] of this.patterns) {
+            try {
+                const patternResult = await pattern.apply(optimizedPath);
+                if (patternResult.improved) {
+                    optimizedPath.splice(0, optimizedPath.length, ...patternResult.path);
+                }
+            } catch (error) {
+                console.error(`Failed to apply pattern ${patternName}:`, error);
+            }
+        }
+
+        return optimizedPath;
+    }
+
+    async hashChain(thoughtChain) {
+        const chainData = thoughtChain.map(t => ({
+            id: t.id,
+            dependencies: t.dependencies || []
+        }));
+        
+        const encoder = new TextEncoder();
+        const data = encoder.encode(JSON.stringify(chainData));
+        const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+        const hashArray = Array.from(new Uint8Array(hashBuffer));
+        return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    }
+
+    async getThought(thoughtId) {
+        // Implementation would depend on how thoughts are stored
+        // This is a placeholder that should be implemented based on the actual storage mechanism
+        return this.performanceTracker.getThought(thoughtId);
+    }
+
+    async analyzeThought(thought) {
+        // This would be implemented based on the actual metrics collection system
+        return this.performanceTracker.getMetrics(thought.id);
+    }
+
+    calculateTotalResources(metrics) {
+        return metrics.reduce((total, metric) => {
+            Object.entries(metric).forEach(([key, value]) => {
+                total[key] = (total[key] || 0) + value;
+            });
+            return total;
+        }, {});
+    }
+
+    async getThoughtMetrics(thoughtId) {
+        // This would be implemented based on the actual metrics collection system
+        return this.performanceTracker.getThoughtMetrics(thoughtId);
+    }
 }
 
 // Enhanced Debug System with advanced monitoring
@@ -1086,314 +1875,726 @@ class EnhancedDebugSystem {
         this.breakpoints = new Set();
         this.metrics = new MetricsCollector();
         this.alertThresholds = config.alertThresholds || {
-            memory: 0.8, // 80% of available memory
-            cpu: 0.9,    // 90% CPU usage
-            time: 5000   // 5 seconds
+            memory: 0.8,    // 80% of available memory
+            cpu: 0.9,       // 90% CPU usage
+            time: 5000,     // 5 seconds
+            errors: 10      // Number of errors per minute
         };
+        this.monitoringIntervalId = null;
+        this.errorCount = new Map(); // Track errors per minute
+        this.debugHooks = new Map(); // Custom debug hooks
         this.setupMonitoring();
     }
 
     setupMonitoring() {
-        // Monitor system resources
-        setInterval(() => this.checkSystemHealth(), 5000);
+        if (this.monitoringIntervalId) {
+            clearInterval(this.monitoringIntervalId);
+        }
+        this.monitoringIntervalId = setInterval(() => this.checkSystemHealth(), 5000);
+    }
+
+    destroy() {
+        if (this.monitoringIntervalId) {
+            clearInterval(this.monitoringIntervalId);
+            this.monitoringIntervalId = null;
+        }
+        this.clearLogs();
+        this.breakpoints.clear();
+        this.errorCount.clear();
+        this.debugHooks.clear();
     }
 
     async checkSystemHealth() {
-        const metrics = await this.metrics.collect();
+        try {
+            const metrics = await this.metrics.collect();
+            const alerts = [];
 
-        // Check against thresholds
-        Object.entries(this.alertThresholds).forEach(([metric, threshold]) => {
-            if (metrics[metric] > threshold) {
-                this.raiseAlert(metric, metrics[metric]);
+            // Check memory usage
+            if (metrics.memory.heapUsedPercentage > this.alertThresholds.memory) {
+                alerts.push({
+                    type: 'MemoryAlert',
+                    value: metrics.memory.heapUsedPercentage,
+                    threshold: this.alertThresholds.memory,
+                    timestamp: Date.now()
+                });
             }
-        });
+
+            // Check CPU usage
+            if (metrics.cpu.percentage > this.alertThresholds.cpu) {
+                alerts.push({
+                    type: 'CPUAlert',
+                    value: metrics.cpu.percentage,
+                    threshold: this.alertThresholds.cpu,
+                    timestamp: Date.now()
+                });
+            }
+
+            // Clean up old error counts
+            const oneMinuteAgo = Date.now() - 60000;
+            for (const [key, value] of this.errorCount) {
+                if (value.timestamp < oneMinuteAgo) {
+                    this.errorCount.delete(key);
+                }
+            }
+
+            if (alerts.length > 0) {
+                this.handleAlerts(alerts);
+            }
+
+            // Store health check results
+            this.logs.set('healthCheck', {
+                timestamp: Date.now(),
+                metrics,
+                alerts
+            });
+        } catch (error) {
+            this.log('error', 'Health check failed', { error: error.message });
+        }
     }
 
-    raiseAlert(metric, value) {
-        const alert = {
-            type: 'ResourceAlert',
-            metric,
-            value,
-            timestamp: Date.now(),
-            severity: this.calculateSeverity(metric, value)
-        };
+    handleAlerts(alerts) {
+        for (const alert of alerts) {
+            this.log('alert', `System alert: ${alert.type}`, alert);
 
-        this.log('system', 'ALERT', `Resource alert: ${metric}`, alert);
-    }
-
-    calculateSeverity(metric, value) {
-        const threshold = this.alertThresholds[metric];
-        const ratio = value / threshold;
-
-        if (ratio > 1.5) return 'CRITICAL';
-        if (ratio > 1.2) return 'HIGH';
-        if (ratio > 1.0) return 'MEDIUM';
-        return 'LOW';
+            // Execute any registered alert handlers
+            const handler = this.debugHooks.get(alert.type);
+            if (handler) {
+                try {
+                    handler(alert);
+                } catch (error) {
+                    this.log('error', 'Alert handler failed', {
+                        alertType: alert.type,
+                        error: error.message
+                    });
+                }
+            }
+        }
     }
 
     async inspectThought(thought) {
-        const inspection = await super.inspectThought(thought);
+        const inspection = {
+            id: thought.id,
+            type: thought.type,
+            timestamp: Date.now(),
+            memory: await this.metrics.getMemoryProfile(thought),
+            traces: await this.collectTraces(thought),
+            resourceUsage: await this.metrics.getResourceUsage(thought),
+            executionGraph: this.generateExecutionGraph(thought),
+            dependencies: await this.analyzeDependencies(thought)
+        };
 
-        // Enhanced inspection
-        inspection.memory = await this.metrics.getMemoryProfile(thought);
-        inspection.traces = await this.collectTraces(thought);
-        inspection.resourceUsage = await this.metrics.getResourceUsage(thought);
-
+        this.logs.set(`thought_${thought.id}`, inspection);
         return inspection;
     }
 
     async collectTraces(thought) {
-        // Implement actual tracing logic
         return {
-            executionPath: [],
-            functionCalls: [],
-            resourceAccess: [],
-            timing: {}
+            executionPath: this.captureExecutionPath(thought),
+            functionCalls: await this.traceFunctionCalls(thought),
+            resourceAccess: this.trackResourceAccess(thought),
+            timing: this.measureExecutionTimes(thought)
         };
     }
-}
 
-class VectorIndex {
-    constructor(dimensions = 128, numTrees = 10) {
-        this.dimensions = dimensions;
-        this.numTrees = numTrees;
-        this.trees = Array.from({ length: numTrees }, () => {
-            const tree = new RandomProjectionTree(dimensions);
-            if (!tree) {
-                throw new Error('Failed to initialize RandomProjectionTree');
+    async traceFunctionCalls(thought) {
+        const calls = [];
+        const originalFunctions = new Map();
+
+        // Store original functions and create proxies
+        for (const key in thought) {
+            if (typeof thought[key] === 'function') {
+                originalFunctions.set(key, thought[key]);
+                thought[key] = new Proxy(thought[key], {
+                    apply: async (target, thisArg, args) => {
+                        const start = performance.now();
+                        const callInfo = {
+                            function: key,
+                            arguments: args.map(arg => this.sanitizeArg(arg)),
+                            timestamp: Date.now()
+                        };
+
+                        try {
+                            const result = await target.apply(thisArg, args);
+                            callInfo.duration = performance.now() - start;
+                            callInfo.status = 'success';
+                            callInfo.result = this.sanitizeArg(result);
+                            return result;
+                        } catch (error) {
+                            callInfo.duration = performance.now() - start;
+                            callInfo.status = 'error';
+                            callInfo.error = error.message;
+                            throw error;
+                        } finally {
+                            calls.push(callInfo);
+                        }
+                    }
+                });
             }
-            return tree;
-        });
+        }
+
+        return calls;
+    }
+
+    sanitizeArg(arg) {
+        // Safely stringify arguments and results for logging
+        try {
+            if (arg === undefined) return 'undefined';
+            if (arg === null) return 'null';
+            if (typeof arg === 'function') return 'function';
+            if (typeof arg === 'object') {
+                return JSON.stringify(arg, (key, value) => {
+                    if (typeof value === 'function') return 'function';
+                    if (value instanceof Error) return value.message;
+                    return value;
+                });
+            }
+            return String(arg);
+        } catch (error) {
+            return '[Complex Object]';
+        }
+    }
+
+    captureExecutionPath(thought) {
+        const path = [];
+        let currentNode = thought;
+
+        while (currentNode) {
+            path.push({
+                id: currentNode.id,
+                type: currentNode.type,
+                timestamp: currentNode.timestamp
+            });
+            currentNode = currentNode.parent;
+        }
+
+        return path;
+    }
+
+    trackResourceAccess(thought) {
+        return {
+            memory: this.getMemoryAccess(thought),
+            storage: this.getStorageAccess(thought),
+            network: this.getNetworkAccess(thought)
+        };
+    }
+
+    measureExecutionTimes(thought) {
+        return {
+            total: 0,
+            phases: [],
+            bottlenecks: []
+        };
+    }
+
+    log(level, message, context = {}) {
+        const logEntry = {
+            timestamp: Date.now(),
+            level,
+            message,
+            context
+        };
+
+        // Store in logs map
+        const key = `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        this.logs.set(key, logEntry);
+
+        // Trim old logs if necessary
+        if (this.logs.size > 1000) { // Keep last 1000 logs
+            const oldestKey = Array.from(this.logs.keys())[0];
+            this.logs.delete(oldestKey);
+        }
+
+        return logEntry;
+    }
+
+    clearLogs() {
+        this.logs.clear();
+    }
+
+    getLogsByLevel(level) {
+        return Array.from(this.logs.values())
+            .filter(entry => entry.level === level);
+    }
+
+    setBreakpoint(thoughtId, condition) {
+        this.breakpoints.set(thoughtId, condition);
+    }
+
+    removeBreakpoint(thoughtId) {
+        this.breakpoints.delete(thoughtId);
+    }
+
+    registerDebugHook(event, handler) {
+        if (typeof handler !== 'function') {
+            throw new Error('Debug hook handler must be a function');
+        }
+        this.debugHooks.set(event, handler);
+    }
+
+    getDebugSnapshot() {
+        return {
+            timestamp: Date.now(),
+            logs: Array.from(this.logs.entries()),
+            metrics: this.metrics.getLatestMetrics(),
+            breakpoints: Array.from(this.breakpoints),
+            errorCounts: Array.from(this.errorCount.entries())
+        };
+    }
+
+    generateExecutionGraph(thought) {
+        const graph = {
+            nodes: [],
+            edges: []
+        };
+
+        const visited = new Set();
+
+        const addNode = (node) => {
+            if (visited.has(node.id)) return;
+            visited.add(node.id);
+
+            graph.nodes.push({
+                id: node.id,
+                type: node.type,
+                timestamp: node.timestamp
+            });
+
+            if (node.dependencies) {
+                node.dependencies.forEach(depId => {
+                    graph.edges.push({
+                        from: depId,
+                        to: node.id
+                    });
+                });
+            }
+
+            if (node.children) {
+                node.children.forEach(child => {
+                    addNode(child);
+                    graph.edges.push({
+                        from: node.id,
+                        to: child.id
+                    });
+                });
+            }
+        };
+
+        addNode(thought);
+        return graph;
+    }
+
+    async analyzeDependencies(thought) {
+        const dependencies = {
+            direct: [],
+            indirect: [],
+            circular: []
+        };
+
+        const visited = new Set();
+        const stack = new Set();
+
+        const analyzeDep = async (node) => {
+            if (stack.has(node.id)) {
+                dependencies.circular.push(node.id);
+                return;
+            }
+
+            if (visited.has(node.id)) return;
+
+            stack.add(node.id);
+            visited.add(node.id);
+
+            if (node.dependencies) {
+                for (const depId of node.dependencies) {
+                    dependencies.direct.push({
+                        from: node.id,
+                        to: depId
+                    });
+
+                    const depNode = await this.getThought(depId);
+                    if (depNode) {
+                        await analyzeDep(depNode);
+                    }
+                }
+            }
+
+            stack.delete(node.id);
+        };
+
+        await analyzeDep(thought);
+        return dependencies;
+    }
+
+    async getThought(thoughtId) {
+        // Implementation would depend on how thoughts are stored/retrieved
+        // This is a placeholder
+        return null;
+    }
+
+    getMemoryAccess(thought) {
+        return {
+            reads: [],
+            writes: [],
+            allocations: []
+        };
+    }
+
+    getStorageAccess(thought) {
+        return {
+            reads: [],
+            writes: [],
+            deletes: []
+        };
+    }
+
+    getNetworkAccess(thought) {
+        return {
+            requests: [],
+            responses: [],
+            errors: []
+        };
     }
 }
 
 // Metrics Collector for enhanced monitoring
 class MetricsCollector {
-    constructor() {
-        this.networkBaseline = {
-            bytesIn: 0,
-            bytesOut: 0,
-            connections: 0,
-            lastUpdate: Date.now()
-        };
-        this.diskBaseline = {
-            reads: 0,
-            writes: 0,
-            lastUpdate: Date.now()
-        };
+    constructor(config = {}) {
         this.metricsHistory = new Map();
-        this.historyLimit = 1000;
-    }
-
-    async collect() {
-        const metrics = {
-            memory: await this.collectMemoryMetrics(),
-            cpu: await this.collectCPUMetrics(),
-            network: await this.collectNetworkMetrics(),
-            disk: await this.collectDiskMetrics(),
-            timestamp: Date.now()
+        this.historyLimit = config.historyLimit || 1000;
+        this.samplingInterval = config.samplingInterval || 1000; // 1 second
+        this.retentionPeriod = config.retentionPeriod || 24 * 60 * 60 * 1000; // 24 hours
+        this.baselineWindow = config.baselineWindow || 60 * 60 * 1000; // 1 hour
+        this.alertThresholds = config.alertThresholds || this.getDefaultThresholds();
+        
+        this.baselines = {
+            network: this.initializeBaseline(),
+            disk: this.initializeBaseline(),
+            memory: this.initializeBaseline(),
+            cpu: this.initializeBaseline()
         };
 
-        this.storeMetricsHistory(metrics);
-        return metrics;
+        this.collectors = new Map();
+        this.intervalId = null;
+        this.isCollecting = false;
+        this.lastCollection = null;
+        this.lock = new AsyncLock();
+        this.initializeCollectors();
     }
 
-    async collectMemoryMetrics() {
-        const usage = process.memoryUsage();
+    initializeBaseline() {
         return {
-            heapUsed: usage.heapUsed,
-            heapTotal: usage.heapTotal,
-            external: usage.external,
-            rss: usage.rss,
-            heapUsedPercentage: (usage.heapUsed / usage.heapTotal) * 100,
-            gcMetrics: await this.getGCMetrics()
+            values: [],
+            lastUpdate: Date.now(),
+            mean: 0,
+            standardDeviation: 0
         };
     }
 
-    async collectCPUMetrics() {
-        const startUsage = process.cpuUsage();
-        await new Promise(resolve => setTimeout(resolve, 100));
-        const endUsage = process.cpuUsage(startUsage);
-
+    getDefaultThresholds() {
         return {
-            user: endUsage.user,
-            system: endUsage.system,
-            percentage: (endUsage.user + endUsage.system) / 1000000,
-            loadAverage: this.getLoadAverage()
+            memory: {
+                usage: 0.9, // 90% memory usage
+                growth: 0.1 // 10% growth rate
+            },
+            cpu: {
+                usage: 0.8, // 80% CPU usage
+                sustained: 0.7 // 70% sustained usage
+            },
+            disk: {
+                usage: 0.95, // 95% disk usage
+                iops: 5000 // IOPS threshold
+            },
+            network: {
+                bandwidth: 0.8, // 80% bandwidth usage
+                errorRate: 0.01 // 1% error rate
+            }
         };
     }
 
-    #baselineLock = new AsyncLock();
-
-    async collectNetworkMetrics() {
-        return await this.#baselineLock.acquire('network', async () => {
-            const currentStats = await this.getNetworkStats();
-            const baseline = { ...this.networkBaseline };
-            const timeDiff = (Date.now() - baseline.lastUpdate) / 1000;
-
-            const metrics = {
-                bytesInPerSec: (currentStats.bytesIn - baseline.bytesIn) / timeDiff,
-                bytesOutPerSec: (currentStats.bytesOut - baseline.bytesOut) / timeDiff,
-                activeConnections: currentStats.connections,
-                connectionRate: (currentStats.connections - baseline.connections) / timeDiff
+    initializeCollectors() {
+        // Memory metrics collector
+        this.collectors.set('memory', async () => {
+            const memoryInfo = process.memoryUsage();
+            return {
+                heapUsed: memoryInfo.heapUsed,
+                heapTotal: memoryInfo.heapTotal,
+                external: memoryInfo.external,
+                rss: memoryInfo.rss,
+                arrayBuffers: memoryInfo.arrayBuffers || 0,
+                usage: memoryInfo.heapUsed / memoryInfo.heapTotal,
+                timestamp: Date.now()
             };
+        });
 
-            this.networkBaseline = {
-                ...currentStats,
-                lastUpdate: Date.now()
+        // CPU metrics collector
+        this.collectors.set('cpu', async () => {
+            const startUsage = process.cpuUsage();
+            await new Promise(resolve => setTimeout(resolve, 100));
+            const endUsage = process.cpuUsage(startUsage);
+            const totalUsage = endUsage.user + endUsage.system;
+
+            return {
+                user: endUsage.user,
+                system: endUsage.system,
+                total: totalUsage,
+                percentage: totalUsage / 1000000, // Convert to percentage
+                loadAverage: os.loadavg(),
+                timestamp: Date.now()
             };
+        });
 
-            return metrics;
+        // Disk metrics collector
+        this.collectors.set('disk', async () => {
+            try {
+                const stats = await this.collectDiskStats();
+                return {
+                    reads: stats.reads,
+                    writes: stats.writes,
+                    iops: stats.iops,
+                    latency: stats.latency,
+                    utilization: stats.utilization,
+                    timestamp: Date.now()
+                };
+            } catch (error) {
+                console.error('Error collecting disk metrics:', error);
+                return null;
+            }
+        });
+
+        // Network metrics collector
+        this.collectors.set('network', async () => {
+            try {
+                const stats = await this.collectNetworkStats();
+                return {
+                    bytesIn: stats.bytesIn,
+                    bytesOut: stats.bytesOut,
+                    packetsIn: stats.packetsIn,
+                    packetsOut: stats.packetsOut,
+                    errors: stats.errors,
+                    dropped: stats.dropped,
+                    timestamp: Date.now()
+                };
+            } catch (error) {
+                console.error('Error collecting network metrics:', error);
+                return null;
+            }
         });
     }
 
-    async collectDiskMetrics() {
-        // Simulate disk stats collection
-        const currentStats = await this.getDiskStats();
-        const timeDiff = (Date.now() - this.diskBaseline.lastUpdate) / 1000;
+    async start() {
+        if (this.intervalId) {
+            return;
+        }
 
-        const metrics = {
-            readsPerSec: (currentStats.reads - this.diskBaseline.reads) / timeDiff,
-            writesPerSec: (currentStats.writes - this.diskBaseline.writes) / timeDiff,
-            freeSpace: await this.getDiskFreeSpace(),
-            iops: await this.calculateIOPS(),
-            latency: await this.measureDiskLatency()
-        };
+        this.intervalId = setInterval(
+            () => this.collect().catch(console.error),
+            this.samplingInterval
+        );
+    }
 
-        // Update baseline
-        this.diskBaseline = {
-            ...currentStats,
-            lastUpdate: Date.now()
-        };
+    async stop() {
+        if (this.intervalId) {
+            clearInterval(this.intervalId);
+            this.intervalId = null;
+        }
+    }
 
+    async collect() {
+        return await this.lock.acquire('collect', async () => {
+            if (this.isCollecting) {
+                return;
+            }
+
+            this.isCollecting = true;
+            try {
+                const metrics = await this.collectAll();
+                this.updateHistory(metrics);
+                this.updateBaselines(metrics);
+                await this.checkThresholds(metrics);
+                this.lastCollection = Date.now();
+                return metrics;
+            } finally {
+                this.isCollecting = false;
+            }
+        });
+    }
+
+    async collectAll() {
+        const metrics = {};
+        for (const [name, collector] of this.collectors) {
+            try {
+                metrics[name] = await collector();
+            } catch (error) {
+                console.error(`Error collecting ${name} metrics:`, error);
+                metrics[name] = null;
+            }
+        }
         return metrics;
     }
 
-    async getGCMetrics() {
-        // This would require integration with Node.js GC hooks
-        // Placeholder for actual GC metrics
-        return {
-            minorGCs: 0,
-            majorGCs: 0,
-            totalGCPauseTime: 0,
-            averageGCPause: 0
-        };
-    }
-
-    getLoadAverage() {
-        const [oneMin, fiveMin, fifteenMin] = process.loadavg();
-        return { oneMin, fiveMin, fifteenMin };
-    }
-
-    async getNetworkStats() {
-        // Placeholder for actual network stats collection
-        return {
-            bytesIn: Math.floor(Math.random() * 1000000),
-            bytesOut: Math.floor(Math.random() * 1000000),
-            connections: Math.floor(Math.random() * 100)
-        };
-    }
-
-    async getDiskStats() {
-        // Placeholder for actual disk stats collection
-        return {
-            reads: Math.floor(Math.random() * 10000),
-            writes: Math.floor(Math.random() * 10000)
-        };
-    }
-
-    async getDiskFreeSpace() {
-        // Placeholder for actual disk space check
-        return {
-            total: 1000000000000, // 1 TB
-            free: 700000000000,   // 700 GB
-            used: 300000000000    // 300 GB
-        };
-    }
-
-    async calculateIOPS() {
-        // Placeholder for actual IOPS calculation
-        return {
-            read: Math.floor(Math.random() * 1000),
-            write: Math.floor(Math.random() * 1000)
-        };
-    }
-
-    async measureNetworkLatency() {
-        // Placeholder for actual network latency measurement
-        return {
-            min: Math.random() * 10,
-            max: Math.random() * 100 + 50,
-            avg: Math.random() * 50 + 25
-        };
-    }
-
-    async measureDiskLatency() {
-        // Placeholder for actual disk latency measurement
-        return {
-            read: Math.random() * 5,
-            write: Math.random() * 10
-        };
-    }
-
-    storeMetricsHistory(metrics) {
-        const timestamp = metrics.timestamp;
+    updateHistory(metrics) {
+        const timestamp = Date.now();
         this.metricsHistory.set(timestamp, metrics);
 
-        // Remove old entries if we exceed the history limit
-        if (this.metricsHistory.size > this.historyLimit) {
-            const oldestKey = Array.from(this.metricsHistory.keys())[0];
+        // Clean up old metrics
+        const cutoff = timestamp - this.retentionPeriod;
+        for (const [ts] of this.metricsHistory) {
+            if (ts < cutoff) {
+                this.metricsHistory.delete(ts);
+            } else {
+                break; // Map is ordered by insertion time
+            }
+        }
+
+        // Enforce history limit
+        while (this.metricsHistory.size > this.historyLimit) {
+            const oldestKey = this.metricsHistory.keys().next().value;
             this.metricsHistory.delete(oldestKey);
         }
     }
 
-    getMetricsHistory(duration) {
+    updateBaselines(metrics) {
         const now = Date.now();
-        const threshold = now - duration;
+        const types = ['network', 'disk', 'memory', 'cpu'];
+
+        for (const type of types) {
+            if (!metrics[type]) continue;
+
+            const baseline = this.baselines[type];
+            baseline.values.push(metrics[type]);
+
+            // Keep only values within baseline window
+            const cutoff = now - this.baselineWindow;
+            baseline.values = baseline.values.filter(v => v.timestamp >= cutoff);
+
+            // Calculate new baseline statistics
+            if (baseline.values.length > 0) {
+                this.updateBaselineStats(baseline);
+            }
+
+            baseline.lastUpdate = now;
+        }
+    }
+
+    updateBaselineStats(baseline) {
+        // Calculate mean
+        const sum = baseline.values.reduce((acc, val) => acc + (val.usage || 0), 0);
+        baseline.mean = sum / baseline.values.length;
+
+        // Calculate standard deviation
+        const squaredDiffs = baseline.values.map(val => 
+            Math.pow((val.usage || 0) - baseline.mean, 2)
+        );
+        const avgSquaredDiff = squaredDiffs.reduce((acc, val) => acc + val, 0) / squaredDiffs.length;
+        baseline.standardDeviation = Math.sqrt(avgSquaredDiff);
+    }
+
+    async checkThresholds(metrics) {
+        const alerts = [];
+
+        // Check memory thresholds
+        if (metrics.memory) {
+            if (metrics.memory.usage > this.alertThresholds.memory.usage) {
+                alerts.push({
+                    type: 'memory',
+                    severity: 'high',
+                    message: 'Memory usage exceeds threshold',
+                    value: metrics.memory.usage,
+                    threshold: this.alertThresholds.memory.usage
+                });
+            }
+        }
+
+        // Check CPU thresholds
+        if (metrics.cpu) {
+            if (metrics.cpu.percentage > this.alertThresholds.cpu.usage) {
+                alerts.push({
+                    type: 'cpu',
+                    severity: 'high',
+                    message: 'CPU usage exceeds threshold',
+                    value: metrics.cpu.percentage,
+                    threshold: this.alertThresholds.cpu.usage
+                });
+            }
+        }
+
+        // Check disk thresholds
+        if (metrics.disk) {
+            if (metrics.disk.utilization > this.alertThresholds.disk.usage) {
+                alerts.push({
+                    type: 'disk',
+                    severity: 'medium',
+                    message: 'Disk utilization exceeds threshold',
+                    value: metrics.disk.utilization,
+                    threshold: this.alertThresholds.disk.usage
+                });
+            }
+        }
+
+        // Check network thresholds
+        if (metrics.network) {
+            const errorRate = metrics.network.errors / 
+                (metrics.network.packetsIn + metrics.network.packetsOut);
+            if (errorRate > this.alertThresholds.network.errorRate) {
+                alerts.push({
+                    type: 'network',
+                    severity: 'medium',
+                    message: 'Network error rate exceeds threshold',
+                    value: errorRate,
+                    threshold: this.alertThresholds.network.errorRate
+                });
+            }
+        }
+
+        return alerts;
+    }
+
+    async getMetrics(duration) {
+        const now = Date.now();
+        const startTime = duration ? now - duration : 0;
 
         return Array.from(this.metricsHistory.entries())
-            .filter(([timestamp]) => timestamp >= threshold)
-            .map(([_, metrics]) => metrics);
+            .filter(([timestamp]) => timestamp >= startTime)
+            .map(([timestamp, metrics]) => ({
+                timestamp,
+                metrics
+            }));
     }
 
-    calculateTrends(duration = 3600000) { // Default to last hour
-        const history = this.getMetricsHistory(duration);
-        if (history.length < 2) return null;
-
-        const trends = {
-            memory: this.calculateMetricTrend(history, 'memory'),
-            cpu: this.calculateMetricTrend(history, 'cpu'),
-            network: this.calculateMetricTrend(history, 'network'),
-            disk: this.calculateMetricTrend(history, 'disk')
-        };
-
-        return trends;
+    async getBaselines() {
+        return this.baselines;
     }
 
-    calculateMetricTrend(history, metricType) {
-        const values = history.map(h => h[metricType]);
-        const timestamps = history.map(h => h.timestamp);
-
-        // Calculate rate of change
-        const firstValue = values[0];
-        const lastValue = values[values.length - 1];
-        const timespan = timestamps[timestamps.length - 1] - timestamps[0];
-
+    async collectDiskStats() {
+        // Implement actual disk stats collection based on your system
+        // This is a placeholder implementation
         return {
-            change: lastValue - firstValue,
-            changeRate: (lastValue - firstValue) / timespan,
-            trend: this.determineTrend(values)
+            reads: Math.floor(Math.random() * 1000),
+            writes: Math.floor(Math.random() * 1000),
+            iops: Math.floor(Math.random() * 5000),
+            latency: Math.random() * 10,
+            utilization: Math.random()
         };
     }
 
-    determineTrend(values) {
-        if (values.length < 2) return 'stable';
+    async collectNetworkStats() {
+        // Implement actual network stats collection based on your system
+        // This is a placeholder implementation
+        return {
+            bytesIn: Math.floor(Math.random() * 1000000),
+            bytesOut: Math.floor(Math.random() * 1000000),
+            packetsIn: Math.floor(Math.random() * 10000),
+            packetsOut: Math.floor(Math.random() * 10000),
+            errors: Math.floor(Math.random() * 10),
+            dropped: Math.floor(Math.random() * 10)
+        };
+    }
 
-        const changes = values.slice(1).map((val, i) => val - values[i]);
-        const avgChange = changes.reduce((a, b) => a + b, 0) / changes.length;
-
-        if (Math.abs(avgChange) < 0.1) return 'stable';
-        return avgChange > 0 ? 'increasing' : 'decreasing';
+    async destroy() {
+        await this.stop();
+        this.metricsHistory.clear();
+        this.collectors.clear();
+        this.baselines = null;
     }
 }
 
@@ -1403,6 +2604,12 @@ class RandomProjectionTree {
         this.dimensions = dimensions;
         this.maxLeafSize = maxLeafSize;
         this.root = this.createNode();
+        this.nodeCount = 1;
+        this.depth = 0;
+        this.maxDepth = 0;
+        this.vectorCount = 0;
+        this.lock = new AsyncLock();
+        this.rebalanceThreshold = 2; // Tree is unbalanced if depth ratio exceeds this
     }
 
     createNode() {
@@ -1411,20 +2618,37 @@ class RandomProjectionTree {
             points: new Map(), // key -> embedding
             splitPlane: null,
             left: null,
-            right: null
+            right: null,
+            size: 0,
+            depth: 0,
+            parent: null
         };
     }
 
     async insert(key, embedding) {
-        await this.insertAtNode(this.root, key, embedding);
+        return await this.lock.acquire('insert', async () => {
+            try {
+                if (!embedding || embedding.length !== this.dimensions) {
+                    throw new Error(`Invalid embedding dimensions: expected ${this.dimensions}`);
+                }
+
+                await this.insertAtNode(this.root, key, embedding);
+                this.vectorCount++;
+                return true;
+            } catch (error) {
+                console.error('Error inserting into tree:', error);
+                throw new Error('Failed to insert into tree: ' + error.message);
+            }
+        });
     }
 
     async insertAtNode(node, key, embedding) {
         if (node.isLeaf) {
-            node.points.set(key, embedding);
+            node.points.set(key, new Float32Array(embedding));
+            node.size++;
 
-            // Split if too many points
-            if (node.points.size > this.maxLeafSize) {
+            // Split if too many points and not too deep
+            if (node.points.size > this.maxLeafSize && node.depth < 20) {
                 await this.splitNode(node);
             }
             return;
@@ -1433,38 +2657,67 @@ class RandomProjectionTree {
         // Non-leaf node: traverse to appropriate child
         const projection = this.project(embedding, node.splitPlane);
         const nextNode = projection <= 0 ? node.left : node.right;
+        nextNode.parent = node;
+        nextNode.depth = node.depth + 1;
+        this.maxDepth = Math.max(this.maxDepth, nextNode.depth);
+        
         await this.insertAtNode(nextNode, key, embedding);
+        node.size++;
     }
 
     async splitNode(node) {
-        // Generate random splitting plane
-        node.splitPlane = this.generateRandomPlane();
-        node.left = this.createNode();
-        node.right = this.createNode();
-        node.isLeaf = false;
+        try {
+            // Generate random splitting plane
+            node.splitPlane = await this.generateRandomPlane();
+            node.left = this.createNode();
+            node.right = this.createNode();
+            node.isLeaf = false;
+            this.nodeCount += 2;
 
-        // Redistribute points
-        for (const [key, embedding] of node.points) {
-            const projection = this.project(embedding, node.splitPlane);
-            const targetNode = projection <= 0 ? node.left : node.right;
-            targetNode.points.set(key, embedding);
+            // Set child properties
+            node.left.depth = node.right.depth = node.depth + 1;
+            node.left.parent = node.right.parent = node;
+
+            // Redistribute points
+            for (const [key, embedding] of node.points) {
+                const projection = this.project(embedding, node.splitPlane);
+                const targetNode = projection <= 0 ? node.left : node.right;
+                targetNode.points.set(key, embedding);
+                targetNode.size++;
+            }
+
+            // Update max depth
+            this.maxDepth = Math.max(this.maxDepth, node.depth + 1);
+
+            // Clear points from this node
+            node.points.clear();
+        } catch (error) {
+            console.error('Error splitting node:', error);
+            throw new Error('Failed to split node: ' + error.message);
         }
-
-        // Clear points from this node
-        node.points.clear();
     }
 
-    generateRandomPlane() {
-        // Generate random unit vector
+    async generateRandomPlane() {
+        // Generate random unit vector for splitting plane
         const plane = new Float32Array(this.dimensions);
         let sumSquares = 0;
 
-        for (let i = 0; i < this.dimensions; i++) {
-            plane[i] = Math.random() * 2 - 1;
-            sumSquares += plane[i] * plane[i];
+        // Use crypto random for better randomness if available
+        if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
+            const randomBytes = new Uint8Array(this.dimensions);
+            crypto.getRandomValues(randomBytes);
+            for (let i = 0; i < this.dimensions; i++) {
+                plane[i] = (randomBytes[i] / 255) * 2 - 1;
+                sumSquares += plane[i] * plane[i];
+            }
+        } else {
+            for (let i = 0; i < this.dimensions; i++) {
+                plane[i] = Math.random() * 2 - 1;
+                sumSquares += plane[i] * plane[i];
+            }
         }
 
-        // Normalize
+        // Normalize the plane vector
         const norm = Math.sqrt(sumSquares);
         for (let i = 0; i < this.dimensions; i++) {
             plane[i] /= norm;
@@ -1482,29 +2735,199 @@ class RandomProjectionTree {
     }
 
     async search(queryEmbedding, limit = 5) {
-        const results = new Map(); // key -> count
-        await this.searchNode(this.root, queryEmbedding, limit, results);
-        return Array.from(results.keys());
+        return await this.lock.acquire('search', async () => {
+            try {
+                if (!queryEmbedding || queryEmbedding.length !== this.dimensions) {
+                    throw new Error('Invalid query embedding dimensions');
+                }
+
+                const results = new Map();
+                await this.searchNode(this.root, queryEmbedding, limit, results);
+
+                return Array.from(results.keys())
+                    .sort((a, b) => results.get(b) - results.get(a))
+                    .slice(0, limit);
+            } catch (error) {
+                console.error('Error during search:', error);
+                throw new Error('Search failed: ' + error.message);
+            }
+        });
     }
 
     async searchNode(node, queryEmbedding, limit, results) {
         if (node.isLeaf) {
             for (const [key, embedding] of node.points) {
-                const similarity = await VectorSimilarity.cosineSimilarity(queryEmbedding, embedding);
-                results.set(key, (results.get(key) || 0) + similarity);
+                const similarity = await this.calculateSimilarity(queryEmbedding, embedding);
+                results.set(key, similarity);
             }
             return;
         }
 
-        const projection = await this.project(queryEmbedding, node.splitPlane);
+        const projection = this.project(queryEmbedding, node.splitPlane);
         const [primaryChild, secondaryChild] = projection <= 0
             ? [node.left, node.right]
             : [node.right, node.left];
 
         await this.searchNode(primaryChild, queryEmbedding, limit, results);
 
-        if (results.size < limit) {
+        // Check if we need to explore the other branch
+        if (this.shouldExploreSecondaryBranch(projection, results, limit)) {
             await this.searchNode(secondaryChild, queryEmbedding, limit, results);
+        }
+    }
+
+    shouldExploreSecondaryBranch(projection, results, limit) {
+        // If we don't have enough results yet, explore the other branch
+        if (results.size < limit) return true;
+
+        // Get the worst score among our current top results
+        const scores = Array.from(results.values()).sort((a, b) => b - a);
+        const worstScore = scores[limit - 1];
+
+        // Calculate the maximum possible similarity in the other branch
+        const splitDistance = Math.abs(projection);
+        const maxPossibleSimilarity = Math.sqrt(1 - splitDistance * splitDistance);
+
+        // Explore if the other branch might contain better results
+        return maxPossibleSimilarity > worstScore;
+    }
+
+    async calculateSimilarity(a, b) {
+        let dotProduct = 0;
+        for (let i = 0; i < this.dimensions; i++) {
+            dotProduct += a[i] * b[i];
+        }
+        return Math.max(-1, Math.min(1, dotProduct));
+    }
+
+    async delete(key) {
+        return await this.lock.acquire('delete', async () => {
+            try {
+                const deleted = await this.deleteFromNode(this.root, key);
+                if (deleted) {
+                    this.vectorCount--;
+                }
+                return deleted;
+            } catch (error) {
+                console.error('Error deleting from tree:', error);
+                throw new Error('Failed to delete from tree: ' + error.message);
+            }
+        });
+    }
+
+    async deleteFromNode(node, key) {
+        if (node.isLeaf) {
+            const deleted = node.points.delete(key);
+            if (deleted) {
+                node.size--;
+                this.updateSizeUpwards(node.parent);
+            }
+            return deleted;
+        }
+
+        // Try both children if not leaf
+        const deletedLeft = await this.deleteFromNode(node.left, key);
+        if (deletedLeft) {
+            node.size--;
+            return true;
+        }
+
+        const deletedRight = await this.deleteFromNode(node.right, key);
+        if (deletedRight) {
+            node.size--;
+            return true;
+        }
+
+        return false;
+    }
+
+    updateSizeUpwards(node) {
+        while (node) {
+            node.size = (node.left ? node.left.size : 0) + 
+                       (node.right ? node.right.size : 0);
+            node = node.parent;
+        }
+    }
+
+    needsRebalancing() {
+        if (this.vectorCount < 100) return false; // Don't rebalance small trees
+        
+        const minDepth = this.getMinDepth(this.root);
+        const depthRatio = this.maxDepth / minDepth;
+        
+        return depthRatio > this.rebalanceThreshold;
+    }
+
+    getMinDepth(node) {
+        if (node.isLeaf) return node.depth;
+        return Math.min(
+            this.getMinDepth(node.left),
+            this.getMinDepth(node.right)
+        );
+    }
+
+    async destroy() {
+        return await this.lock.acquire('destroy', async () => {
+            try {
+                this.destroyNode(this.root);
+                this.root = null;
+                this.nodeCount = 0;
+                this.vectorCount = 0;
+                this.depth = 0;
+                this.maxDepth = 0;
+                return true;
+            } catch (error) {
+                console.error('Error destroying tree:', error);
+                throw new Error('Failed to destroy tree: ' + error.message);
+            }
+        });
+    }
+
+    destroyNode(node) {
+        if (!node) return;
+        
+        if (node.isLeaf) {
+            node.points.clear();
+        } else {
+            this.destroyNode(node.left);
+            this.destroyNode(node.right);
+        }
+        
+        node.splitPlane = null;
+        node.left = null;
+        node.right = null;
+        node.parent = null;
+    }
+
+    async getStats() {
+        return {
+            nodeCount: this.nodeCount,
+            vectorCount: this.vectorCount,
+            depth: this.maxDepth,
+            minDepth: this.getMinDepth(this.root),
+            averageLeafSize: this.calculateAverageLeafSize(),
+            isBalanced: !this.needsRebalancing()
+        };
+    }
+
+    calculateAverageLeafSize() {
+        let leafSizes = [];
+        this.collectLeafSizes(this.root, leafSizes);
+        
+        if (leafSizes.length === 0) return 0;
+        
+        const sum = leafSizes.reduce((a, b) => a + b, 0);
+        return sum / leafSizes.length;
+    }
+
+    collectLeafSizes(node, sizes) {
+        if (!node) return;
+        
+        if (node.isLeaf) {
+            sizes.push(node.points.size);
+        } else {
+            this.collectLeafSizes(node.left, sizes);
+            this.collectLeafSizes(node.right, sizes);
         }
     }
 }
