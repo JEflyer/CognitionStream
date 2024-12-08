@@ -5,7 +5,7 @@ const aiConfig = {
         optimization: 'https://api.example.com/v1/optimize'
     },
     models: {
-        embedding: 'text-embedding-model',
+        embedding: 'text-embedding-ada-002',
         compression: 'compression-model',
         optimization: 'chain-optimizer-model'
     },
