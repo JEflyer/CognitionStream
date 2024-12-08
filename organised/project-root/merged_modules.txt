@@ -724,6 +724,8 @@ const aiConfig = {
         batchSize: 32
     }
 };
+
+export default aiConfig;
 --- End of modules/config/aiConfig.js ---
 
 
@@ -1780,7 +1782,11 @@ import { ThoughtError } from '../errors/thoughtError';
 import { CompressionUtil } from '../storage/utils/compression';
 
 class EnhancedMemorySystem {
+    #lock = new AsyncLock();
+
+
     constructor(config = {}) {
+        this.modelCache = new Map(); 
         this.shortTermMemory = new HybridStorage({
             dbName: 'shortTermMemory',
             maxMemoryItems: config.shortTermLimit || 10000,
@@ -1807,10 +1813,7 @@ class EnhancedMemorySystem {
         this.lastCleanupAttempt = null;
         this.isCleaningUp = false;
         this.cleanupLock = new AsyncLock();
-        this.#lock = new AsyncLock();
     }
-
-    #lock
 
     async releaseResources() {
         try {
@@ -3853,11 +3856,24 @@ import { VectorStore } from './vectorStoreBase';
 
 class EnhancedVectorStore extends VectorStore {
     constructor() {
+        super();
+
         this.store = new Map();
         this.index = new VectorIndex();
         this.deletedKeys = new Set();
         this.modelCache = new Map();
         this.dimensions = 128; // Embedding dimension
+
+        // After creating the index, assume the index initializes one or more trees.
+        // We'll set this.root to the root of the first tree for searchNode operations.
+        // This depends on VectorIndex and RandomProjectionTree implementation details.
+        // If your VectorIndex creates multiple trees, just pick the first one:
+        if (this.index.trees && this.index.trees.length > 0) {
+            this.root = this.index.trees[0].root;
+        } else {
+            // If no trees exist yet, you may need to handle this differently or lazily.
+            this.root = null;
+        }
 
         this.apiConfig = {
             endpoint: null,
@@ -3867,6 +3883,55 @@ class EnhancedVectorStore extends VectorStore {
 
         this.searchLock = new AsyncLock();
         this.updateLock = new AsyncLock();
+    }
+
+    // Implement abstract methods from VectorStore
+    async add(key, embedding) {
+        this.validateVector(embedding);
+        this.normalizeVector(embedding);
+        await this.index.add(key, embedding);
+        this.store.set(key, embedding);
+    }
+
+    async delete(key) {
+        const deleted = await this.index.delete(key);
+        if (deleted) {
+            this.store.delete(key);
+            this.deletedKeys.add(key);
+            return true;
+        }
+        return false;
+    }
+
+    async clear() {
+        // Remove all vectors
+        for (const key of this.store.keys()) {
+            await this.delete(key);
+        }
+    }
+
+    async size() {
+        // Return the number of vectors currently stored
+        return this.store.size;
+    }
+
+    async has(key) {
+        return this.store.has(key);
+    }
+
+    async vacuum() {
+        // If VectorIndex supports maintenance, call it here
+        if (typeof this.index.maintenance === 'function') {
+            await this.index.maintenance();
+        }
+    }
+
+    async getUsageMetrics() {
+        // Return basic usage metrics. Adjust as needed.
+        return {
+            vectorCount: await this.size(),
+            dimensions: this.dimensions
+        };
     }
 
     async generateEmbedding(data) {
@@ -3998,6 +4063,19 @@ class EnhancedVectorStore extends VectorStore {
         }
     }
 
+    validateVector(vector) {
+        if (!vector || !Array.isArray(vector)) {
+            throw new Error('Invalid vector: must be an array');
+        }
+        if (vector.length !== this.dimensions) {
+            throw new Error(`Invalid vector dimensions: expected ${this.dimensions}, got ${vector.length}`);
+        }
+        if (!vector.every(v => typeof v === 'number' && !isNaN(v))) {
+            throw new Error('Invalid vector: all elements must be numbers');
+        }
+    }
+
+    // Overriding the search method from VectorStore:
     async search(queryEmbedding, limit = 5, similarityThreshold = 0.5) {
         // Validate input vector
         this.validateVector(queryEmbedding);
@@ -4006,6 +4084,9 @@ class EnhancedVectorStore extends VectorStore {
             const results = new Map();
 
             try {
+                if (!this.root) {
+                    throw new Error('No root node available for searching');
+                }
                 await this.searchNode(this.root, queryEmbedding, limit, results);
 
                 // Sort and filter results atomically
@@ -4021,36 +4102,12 @@ class EnhancedVectorStore extends VectorStore {
         });
     }
 
-    validateVector(vector) {
-        if (!vector || !Array.isArray(vector)) {
-            throw new Error('Invalid vector: must be an array');
+    project(embedding, plane) {
+        let sum = 0;
+        for (let i = 0; i < this.dimensions; i++) {
+            sum += embedding[i] * plane[i];
         }
-        if (vector.length !== this.dimensions) {
-            throw new Error(`Invalid vector dimensions: expected ${this.dimensions}, got ${vector.length}`);
-        }
-        if (!vector.every(v => typeof v === 'number' && !isNaN(v))) {
-            throw new Error('Invalid vector: all elements must be numbers');
-        }
-    }
-
-    async destroy() {
-        try {
-            // Clear all stored vectors
-            this.store.clear();
-
-            // Clear index
-            await this.index.destroy();
-
-            // Clear caches
-            this.modelCache.clear();
-            this.deletedKeys.clear();
-
-            // Release any held resources
-            this.root = null;
-        } catch (error) {
-            console.error('Error destroying vector store:', error);
-            throw new Error('Failed to destroy vector store: ' + error.message);
-        }
+        return sum;
     }
 
     async searchNode(node, queryEmbedding, limit, results) {
@@ -4086,7 +4143,29 @@ class EnhancedVectorStore extends VectorStore {
             await this.searchNode(secondaryChild, queryEmbedding, limit, results);
         }
     }
+
+    async destroy() {
+        try {
+            // Clear all stored vectors
+            this.store.clear();
+
+            // Clear index
+            await this.index.destroy();
+
+            // Clear caches
+            this.modelCache.clear();
+            this.deletedKeys.clear();
+
+            // Release any held resources
+            this.root = null;
+        } catch (error) {
+            console.error('Error destroying vector store:', error);
+            throw new Error('Failed to destroy vector store: ' + error.message);
+        }
+    }
 }
+
+export { EnhancedVectorStore };
 --- End of modules/vector/vectorStore.js ---
 
 

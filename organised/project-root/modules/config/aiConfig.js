@@ -1,6 +1,6 @@
 const aiConfig = {
     endpoints: {
-        embedding: 'https://api.example.com/v1/embeddings',
+        embedding: 'https://api.openai.com/v1/embeddings',
         compression: 'https://api.example.com/v1/compress',
         optimization: 'https://api.example.com/v1/optimize'
     },
