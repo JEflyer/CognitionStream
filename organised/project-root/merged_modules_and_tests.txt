@@ -1,0 +1,4624 @@
+
+Folder Structure:
+
+
+=== Begin File Contents ===
+
+
+
+
+=== Folder: modules/chain ===
+
+
+--- File: modules/chain/index.js ---
+
+// modules/chain/index.js
+export { EnhancedPatternOptimizer } from './optimizer';
+export { ChainUtil } from './utils/chainUtil';
+--- End of modules/chain/index.js ---
+
+
+--- File: modules/chain/optimizer.js ---
+
+const { AsyncLock } = require('../concurrency');
+const { LRUCache } = require('../memory/cache/lru');
+const { ThoughtError } = require('../errors/thoughtError');
+
+class EnhancedPatternOptimizer {
+    constructor(performanceTracker) {
+        this.performanceTracker = performanceTracker;
+        this.patterns = new Map();
+        this.cache = new LRUCache(1000);
+        this.learningRate = 0.1;
+
+        // Add AI configuration
+        this.aiConfig = {
+            endpoint: null,
+            apiKey: null,
+            optimizerModel: null
+        };
+    }
+
+    async optimizeChain(thoughtChain) {
+        const chainHash = this.hashChain(thoughtChain);
+        const cachedOptimization = this.cache.get(chainHash);
+
+        if (cachedOptimization) {
+            // Validate cached optimization
+            try {
+                await this.validateOptimization(cachedOptimization, thoughtChain);
+                return cachedOptimization;
+            } catch (error) {
+                console.warn('Cached optimization invalid:', error);
+                this.cache.delete(chainHash); // Remove invalid cache entry
+            }
+        }
+
+        const optimizedChain = await this.analyzeAndOptimize(thoughtChain);
+        this.cache.set(chainHash, optimizedChain);
+        return optimizedChain;
+    }
+
+    async validateOptimization(optimization, originalChain) {
+        // Ensure all thoughts exist
+        const thoughtIds = new Set(originalChain.map(t => t.id));
+        for (const thought of optimization) {
+            if (!thoughtIds.has(thought.id)) {
+                throw new Error(`Optimization references non-existent thought: ${thought.id}`);
+            }
+        }
+
+        // Validate dependencies
+        for (const thought of optimization) {
+            if (thought.dependencies) {
+                for (const depId of thought.dependencies) {
+                    if (!thoughtIds.has(depId)) {
+                        throw new Error(`Invalid dependency: ${depId} in thought ${thought.id}`);
+                    }
+                }
+            }
+        }
+
+        // Ensure no circular dependencies
+        this.checkForCircularDependencies(optimization);
+
+        return true;
+    }
+
+    checkForCircularDependencies(chain) {
+        const visited = new Set();
+        const recursionStack = new Set();
+
+        const dfs = (thoughtId) => {
+            if (recursionStack.has(thoughtId)) {
+                throw new Error(`Circular dependency detected: ${thoughtId}`);
+            }
+            if (visited.has(thoughtId)) {
+                return;
+            }
+
+            visited.add(thoughtId);
+            recursionStack.add(thoughtId);
+
+            const thought = chain.find(t => t.id === thoughtId);
+            if (thought && thought.dependencies) {
+                for (const depId of thought.dependencies) {
+                    dfs(depId);
+                }
+            }
+
+            recursionStack.delete(thoughtId);
+        };
+
+        for (const thought of chain) {
+            dfs(thought.id);
+        }
+    }
+
+    async analyzeAndOptimize(thoughtChain) {
+        // Add AI-powered optimization
+        if (this.aiConfig.optimizerModel) {
+            try {
+                const response = await fetch(`${this.aiConfig.endpoint}/optimize`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${this.aiConfig.apiKey}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        chain: thoughtChain,
+                        model: this.aiConfig.optimizerModel
+                    })
+                });
+
+                const aiOptimization = await response.json();
+                return this.mergeWithBaselineOptimization(
+                    aiOptimization,
+                    await this.baselineOptimization(thoughtChain)
+                );
+            } catch (error) {
+                console.error('AI optimization failed, using baseline:', error);
+            }
+        }
+
+        // Fallback to existing optimization logic
+        return this.baselineOptimization(thoughtChain);
+    }
+
+    async baselineOptimization(thoughtChain) {
+        try {
+            // Build dependency graph
+            const graph = this.buildDependencyGraph(thoughtChain);
+            
+            // Find all possible execution paths
+            const paths = this.findExecutionPaths(graph);
+            
+            // Optimize each path
+            const optimizedPaths = await Promise.all(
+                paths.map(path => this.optimizePath(path))
+            );
+
+            // Analyze metrics for each optimized path
+            const pathMetrics = await Promise.all(
+                optimizedPaths.map(async path => ({
+                    path,
+                    metrics: await this.calculatePathMetrics(path)
+                }))
+            );
+
+            // Select best path based on metrics
+            const bestPath = this.selectOptimalPath(pathMetrics);
+            
+            // Apply performance patterns
+            const patternOptimizedPath = await this.applyPerformancePatterns(bestPath);
+            
+            // Validate final optimization
+            await this.validateOptimization(patternOptimizedPath, thoughtChain);
+            
+            return patternOptimizedPath;
+        } catch (error) {
+            console.error('Baseline optimization failed:', error);
+            // Return original chain if optimization fails
+            return thoughtChain;
+        }
+    }
+
+    buildDependencyGraph(thoughtChain) {
+        const graph = new Map();
+
+        thoughtChain.forEach(thought => {
+            graph.set(thought.id, {
+                thought,
+                dependencies: new Set(thought.dependencies || []),
+                dependents: new Set()
+            });
+        });
+
+        // Build reverse dependencies
+        thoughtChain.forEach(thought => {
+            (thought.dependencies || []).forEach(depId => {
+                const node = graph.get(depId);
+                if (node) {
+                    node.dependents.add(thought.id);
+                }
+            });
+        });
+
+        return graph;
+    }
+
+    findExecutionPaths(graph) {
+        const paths = [];
+        const visited = new Set();
+
+        // Find root nodes (nodes with no dependencies)
+        const roots = Array.from(graph.entries())
+            .filter(([_, node]) => node.dependencies.size === 0)
+            .map(([id]) => id);
+
+        // DFS from each root
+        roots.forEach(root => {
+            const path = this.explorePath(root, graph, visited, new Set());
+            if (path.length > 0) {
+                paths.push(path);
+            }
+        });
+
+        return paths;
+    }
+
+    async optimizePath(path) {
+        const optimizedPath = [];
+        let currentBatch = [];
+
+        for (const thoughtId of path) {
+            const thought = this.getThought(thoughtId);
+            const metrics = await this.analyzeThought(thought);
+
+            // Check if thought can be batched
+            if (this.canBatch(thought, currentBatch, metrics)) {
+                currentBatch.push(thought);
+            } else {
+                if (currentBatch.length > 0) {
+                    optimizedPath.push(this.createBatch(currentBatch));
+                    currentBatch = [thought];
+                } else {
+                    optimizedPath.push(thought);
+                }
+            }
+        }
+
+        // Handle remaining batch
+        if (currentBatch.length > 0) {
+            optimizedPath.push(this.createBatch(currentBatch));
+        }
+
+        return optimizedPath;
+    }
+
+    canBatch(thought, batch, metrics) {
+        if (batch.length === 0) return true;
+
+        // Check resource usage
+        const batchMetrics = batch.map(t => this.getThoughtMetrics(t.id));
+        const totalResources = this.calculateTotalResources(batchMetrics);
+
+        // Check if adding this thought would exceed resource limits
+        return this.checkResourceLimits(totalResources, metrics);
+    }
+
+    createBatch(thoughts) {
+        return {
+            id: `batch_${thoughts.map(t => t.id).join('_')}`,
+            type: 'batch',
+            thoughts: thoughts,
+            execute: async (context) => {
+                return Promise.all(thoughts.map(t => t.execute(context)));
+            }
+        };
+    }
+
+    checkResourceLimits(currentTotal, newMetrics) {
+        // Implement resource limit checks
+        const limits = {
+            memory: 1000000000, // 1GB
+            cpu: 0.8, // 80% CPU
+            time: 1000 // 1 second
+        };
+
+        return Object.entries(limits).every(([resource, limit]) => {
+            return (currentTotal[resource] || 0) + (newMetrics[resource] || 0) <= limit;
+        });
+    }
+
+    async calculatePathMetrics(path) {
+        const metrics = {
+            totalExecutionTime: 0,
+            peakMemoryUsage: 0,
+            cpuUtilization: 0,
+            resourceEfficiency: 0
+        };
+
+        for (const thought of path) {
+            const thoughtMetrics = await this.analyzeThought(thought);
+            metrics.totalExecutionTime += thoughtMetrics.executionTime || 0;
+            metrics.peakMemoryUsage = Math.max(metrics.peakMemoryUsage, thoughtMetrics.memoryUsage || 0);
+            metrics.cpuUtilization = Math.max(metrics.cpuUtilization, thoughtMetrics.cpuUsage || 0);
+        }
+
+        // Calculate resource efficiency score
+        metrics.resourceEfficiency = this.calculateEfficiencyScore(metrics);
+        return metrics;
+    }
+
+    calculateEfficiencyScore(metrics) {
+        const weights = {
+            executionTime: 0.4,
+            memoryUsage: 0.3,
+            cpuUtilization: 0.3
+        };
+
+        return (
+            (1 / (metrics.totalExecutionTime + 1)) * weights.executionTime +
+            (1 / (metrics.peakMemoryUsage + 1)) * weights.memoryUsage +
+            (1 / (metrics.cpuUtilization + 1)) * weights.cpuUtilization
+        );
+    }
+
+    selectOptimalPath(pathMetrics) {
+        return pathMetrics.reduce((best, current) => {
+            if (!best || current.metrics.resourceEfficiency > best.metrics.resourceEfficiency) {
+                return current;
+            }
+            return best;
+        }).path;
+    }
+
+    async applyPerformancePatterns(path) {
+        const optimizedPath = [...path];
+        
+        // Apply known optimization patterns
+        for (const [patternName, pattern] of this.patterns) {
+            try {
+                const patternResult = await pattern.apply(optimizedPath);
+                if (patternResult.improved) {
+                    optimizedPath.splice(0, optimizedPath.length, ...patternResult.path);
+                }
+            } catch (error) {
+                console.error(`Failed to apply pattern ${patternName}:`, error);
+            }
+        }
+
+        return optimizedPath;
+    }
+
+    async hashChain(thoughtChain) {
+        const chainData = thoughtChain.map(t => ({
+            id: t.id,
+            dependencies: t.dependencies || []
+        }));
+        
+        const encoder = new TextEncoder();
+        const data = encoder.encode(JSON.stringify(chainData));
+        const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+        const hashArray = Array.from(new Uint8Array(hashBuffer));
+        return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    }
+
+    async getThought(thoughtId) {
+        // Implementation would depend on how thoughts are stored
+        // This is a placeholder that should be implemented based on the actual storage mechanism
+        return this.performanceTracker.getThought(thoughtId);
+    }
+
+    async analyzeThought(thought) {
+        // This would be implemented based on the actual metrics collection system
+        return this.performanceTracker.getMetrics(thought.id);
+    }
+
+    calculateTotalResources(metrics) {
+        return metrics.reduce((total, metric) => {
+            Object.entries(metric).forEach(([key, value]) => {
+                total[key] = (total[key] || 0) + value;
+            });
+            return total;
+        }, {});
+    }
+
+    async getThoughtMetrics(thoughtId) {
+        // This would be implemented based on the actual metrics collection system
+        return this.performanceTracker.getThoughtMetrics(thoughtId);
+    }
+}
+
+module.exports = { EnhancedPatternOptimizer };
+--- End of modules/chain/optimizer.js ---
+
+
+
+=== Folder: modules/chain/utils ===
+
+
+--- File: modules/chain/utils/chainUtil.js ---
+
+class ChainUtil {
+    static hashChain(thoughtChain) {
+        const chainString = JSON.stringify(thoughtChain.map(t => ({
+            id: t.id,
+            dependencies: t.dependencies || []
+        })));
+
+        // Create hash using available API
+        if (typeof crypto !== 'undefined' && crypto.subtle) {
+            return crypto.subtle.digest('SHA-256', new TextEncoder().encode(chainString))
+                .then(hash => Array.from(new Uint8Array(hash))
+                    .map(b => b.toString(16).padStart(2, '0'))
+                    .join(''));
+        }
+
+        // Simple fallback hash
+        let hash = 0;
+        for (let i = 0; i < chainString.length; i++) {
+            const char = chainString.charCodeAt(i);
+            hash = ((hash << 5) - hash) + char;
+            hash = hash & hash;
+        }
+        return hash.toString(36);
+    }
+
+    static explorePath(nodeId, graph, visited = new Set(), currentPath = new Set(), paths = []) {
+        // Track the current exploration path
+        currentPath.add(nodeId);
+
+        const node = graph.get(nodeId);
+        if (!node) {
+            currentPath.delete(nodeId);
+            return [];
+        }
+
+        // Explore all dependents
+        for (const dependentId of node.dependents) {
+            if (currentPath.has(dependentId)) {
+                throw new Error(`Circular dependency detected: ${nodeId} -> ${dependentId}`);
+            }
+
+            if (!visited.has(dependentId)) {
+                // Recursively explore and collect all valid paths
+                const subPaths = this.explorePath(dependentId, graph, visited, currentPath, paths);
+                paths.push(...subPaths.map(path => [nodeId, ...path]));
+            }
+        }
+
+        // If this is a leaf node (no dependents) or all dependents are visited
+        if (node.dependents.size === 0 ||
+            Array.from(node.dependents).every(dep => visited.has(dep))) {
+            paths.push([nodeId]);
+        }
+
+        visited.add(nodeId);
+        currentPath.delete(nodeId);
+        return paths;
+    }
+
+    static combinePaths(paths) {
+        // Merge parallel and sequential paths
+        const merged = {
+            parallel: new Set(),
+            sequential: new Map()
+        };
+
+        paths.forEach(path => {
+            if (Array.isArray(path)) {
+                // Single linear path
+                path.forEach((nodeId, index) => {
+                    if (index === 0) {
+                        merged.parallel.add(nodeId);
+                    } else {
+                        merged.sequential.set(nodeId, path.slice(0, index));
+                    }
+                });
+            } else {
+                // Already optimized path
+                path.parallel.forEach(nodeId => merged.parallel.add(nodeId));
+                path.sequential.forEach((deps, nodeId) => {
+                    merged.sequential.set(nodeId, deps);
+                });
+            }
+        });
+
+        return {
+            parallel: Array.from(merged.parallel),
+            sequential: Array.from(merged.sequential.entries())
+        };
+    }
+}
+
+export { ChainUtil };
+--- End of modules/chain/utils/chainUtil.js ---
+
+
+
+=== Folder: modules/concurrency ===
+
+
+--- File: modules/concurrency/asyncLock.js ---
+
+class AsyncLock {
+    constructor() {
+        this.locks = new Map();
+        this.waiting = new Map();
+        this.debug = false;
+        this.timeout = 10000;
+        this.metrics = {
+            acquireCount: 0,
+            timeouts: 0,
+            contentionCount: 0,
+            totalWaitTime: 0
+        };
+    }
+
+    async acquire(key, fn, timeout = this.timeout) {
+        const startTime = Date.now();
+        let lockResolve;
+        let lockPromise;
+        
+        try {
+            // Get or create the lock for this key
+            if (!this.locks.has(key)) {
+                this.locks.set(key, Promise.resolve());
+            }
+
+            const currentLock = this.locks.get(key);
+
+            // Create a deferred promise for this lock request
+            lockPromise = new Promise(resolve => {
+                lockResolve = resolve;
+            });
+
+            // Add to waiting queue
+            if (!this.waiting.has(key)) {
+                this.waiting.set(key, []);
+            }
+            const waitingList = this.waiting.get(key);
+            waitingList.push(lockResolve);
+
+            // Wait for previous lock to complete with timeout
+            await Promise.race([
+                currentLock,
+                this.createTimeout(timeout)
+            ]);
+
+            // Update metrics
+            this.metrics.acquireCount++;
+            if (waitingList.length > 1) {
+                this.metrics.contentionCount++;
+            }
+
+            // Set this as the current lock
+            this.locks.set(key, lockPromise);
+
+            // Execute the function
+            const result = await fn();
+
+            return result;
+        } catch (error) {
+            if (error.name === 'LockTimeoutError') {
+                this.metrics.timeouts++;
+            }
+            throw error;
+        } finally {
+            // Calculate wait time
+            const waitTime = Date.now() - startTime;
+            this.metrics.totalWaitTime += waitTime;
+
+            // Remove from waiting queue
+            const waitingList = this.waiting.get(key);
+            if (waitingList && waitingList.length > 0) {
+                const index = waitingList.findIndex(r => r === lockResolve);
+                if (index !== -1) {
+                    waitingList.splice(index, 1);
+                }
+                
+                // Resolve current lock
+                if (lockResolve) lockResolve();
+                
+                // Release the next waiting lock if any
+                if (waitingList.length > 0) {
+                    waitingList[0]();
+                } else {
+                    this.waiting.delete(key);
+                    // Only delete the lock if there are no more waiters
+                    if (this.locks.get(key) === lockPromise) {
+                        this.locks.delete(key);
+                    }
+                }
+            }
+
+            if (this.debug) {
+                console.log(`Lock ${key} released after ${waitTime}ms`);
+            }
+        }
+    }
+
+    async tryAcquire(key, fn, timeout = 0) {
+        if (this.isLocked(key)) {
+            return null;
+        }
+        
+        return await this.acquire(key, fn, timeout);
+    }
+
+    async acquireMultiple(keys, fn, timeout = this.timeout) {
+        // Sort keys to prevent deadlocks
+        const sortedKeys = [...new Set(keys)].sort();
+        
+        // Acquire all locks in order
+        const acquire = async (index) => {
+            if (index >= sortedKeys.length) {
+                return await fn();
+            }
+            
+            return await this.acquire(sortedKeys[index], async () => {
+                return await acquire(index + 1);
+            }, timeout);
+        };
+        
+        return await acquire(0);
+    }
+
+    async withLock(key, fn, timeout = this.timeout) {
+        return await this.acquire(key, fn, timeout);
+    }
+
+    createTimeout(timeout) {
+        return new Promise((_, reject) => {
+            setTimeout(() => {
+                const error = new Error('Lock acquisition timed out');
+                error.name = 'LockTimeoutError';
+                reject(error);
+            }, timeout);
+        });
+    }
+
+    isLocked(key) {
+        return this.locks.has(key) || (this.waiting.get(key)?.length > 0);
+    }
+
+    getWaitingCount(key) {
+        return this.waiting.get(key)?.length || 0;
+    }
+
+    async isBusy() {
+        return this.locks.size > 0 || Array.from(this.waiting.values()).some(list => list.length > 0);
+    }
+
+    getMetrics() {
+        const totalOperations = this.metrics.acquireCount || 1;
+        return {
+            ...this.metrics,
+            averageWaitTime: this.metrics.totalWaitTime / totalOperations,
+            contentionRate: this.metrics.contentionCount / totalOperations,
+            timeoutRate: this.metrics.timeouts / totalOperations,
+            activeKeys: this.locks.size,
+            waitingOperations: Array.from(this.waiting.values())
+                .reduce((sum, list) => sum + list.length, 0)
+        };
+    }
+
+    async releaseAll() {
+        // Release all locks
+        for (const [key, waitingList] of this.waiting.entries()) {
+            for (const resolver of waitingList) {
+                resolver();
+            }
+        }
+        
+        this.locks.clear();
+        this.waiting.clear();
+    }
+
+    reset() {
+        this.releaseAll();
+        this.metrics = {
+            acquireCount: 0,
+            timeouts: 0,
+            contentionCount: 0,
+            totalWaitTime: 0
+        };
+    }
+
+    setDebug(enabled) {
+        this.debug = enabled;
+    }
+
+    setTimeout(timeout) {
+        if (timeout <= 0) {
+            throw new Error('Timeout must be greater than 0');
+        }
+        this.timeout = timeout;
+    }
+}
+
+export { AsyncLock };
+
+// For CommonJS compatibility
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = { AsyncLock };
+}
+--- End of modules/concurrency/asyncLock.js ---
+
+
+--- File: modules/concurrency/index.js ---
+
+import { AsyncLock } from './asyncLock.js';
+
+export { AsyncLock };
+
+// For CommonJS compatibility
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = { AsyncLock };
+}
+--- End of modules/concurrency/index.js ---
+
+
+
+=== Folder: modules/config ===
+
+
+--- File: modules/config/aiConfig.js ---
+
+const aiConfig = {
+    endpoints: {
+        embedding: 'https://api.openai.com/v1/embeddings',
+        compression: 'https://api.example.com/v1/compress',
+        optimization: 'https://api.example.com/v1/optimize'
+    },
+    models: {
+        embedding: 'text-embedding-ada-002',
+        compression: 'compression-model',
+        optimization: 'chain-optimizer-model'
+    },
+    apiKey: 'your-api-key-here',
+    options: {
+        maxRetries: 3,
+        timeout: 10000,
+        batchSize: 32
+    }
+};
+
+export default aiConfig;
+--- End of modules/config/aiConfig.js ---
+
+
+--- File: modules/config/index.js ---
+
+// modules/config/index.js
+export { default as aiConfig } from './aiConfig';
+--- End of modules/config/index.js ---
+
+
+
+=== Folder: modules/debug ===
+
+
+--- File: modules/debug/debugSystem.js ---
+
+import { AsyncLock } from '../concurrency';
+import { MetricsCollector } from './metrics/collector';
+import { ThoughtError } from '../errors/thoughtError';
+
+class EnhancedDebugSystem {
+    constructor(config = {}) {
+        this.logs = new Map();
+        this.breakpoints = new Set();
+        this.metrics = new MetricsCollector();
+        this.alertThresholds = config.alertThresholds || {
+            memory: 0.8,    // 80% of available memory
+            cpu: 0.9,       // 90% CPU usage
+            time: 5000,     // 5 seconds
+            errors: 10      // Number of errors per minute
+        };
+        this.monitoringIntervalId = null;
+        this.errorCount = new Map(); // Track errors per minute
+        this.debugHooks = new Map(); // Custom debug hooks
+        this.setupMonitoring();
+    }
+
+    setupMonitoring() {
+        if (this.monitoringIntervalId) {
+            clearInterval(this.monitoringIntervalId);
+        }
+        this.monitoringIntervalId = setInterval(() => this.checkSystemHealth(), 5000);
+    }
+
+    destroy() {
+        if (this.monitoringIntervalId) {
+            clearInterval(this.monitoringIntervalId);
+            this.monitoringIntervalId = null;
+        }
+        this.clearLogs();
+        this.breakpoints.clear();
+        this.errorCount.clear();
+        this.debugHooks.clear();
+    }
+
+    async checkSystemHealth() {
+        try {
+            const metrics = await this.metrics.collect();
+            const alerts = [];
+
+            // Check memory usage
+            if (metrics.memory.heapUsedPercentage > this.alertThresholds.memory) {
+                alerts.push({
+                    type: 'MemoryAlert',
+                    value: metrics.memory.heapUsedPercentage,
+                    threshold: this.alertThresholds.memory,
+                    timestamp: Date.now()
+                });
+            }
+
+            // Check CPU usage
+            if (metrics.cpu.percentage > this.alertThresholds.cpu) {
+                alerts.push({
+                    type: 'CPUAlert',
+                    value: metrics.cpu.percentage,
+                    threshold: this.alertThresholds.cpu,
+                    timestamp: Date.now()
+                });
+            }
+
+            // Clean up old error counts
+            const oneMinuteAgo = Date.now() - 60000;
+            for (const [key, value] of this.errorCount) {
+                if (value.timestamp < oneMinuteAgo) {
+                    this.errorCount.delete(key);
+                }
+            }
+
+            if (alerts.length > 0) {
+                this.handleAlerts(alerts);
+            }
+
+            // Store health check results
+            this.logs.set('healthCheck', {
+                timestamp: Date.now(),
+                metrics,
+                alerts
+            });
+        } catch (error) {
+            this.log('error', 'Health check failed', { error: error.message });
+        }
+    }
+
+    handleAlerts(alerts) {
+        for (const alert of alerts) {
+            this.log('alert', `System alert: ${alert.type}`, alert);
+
+            // Execute any registered alert handlers
+            const handler = this.debugHooks.get(alert.type);
+            if (handler) {
+                try {
+                    handler(alert);
+                } catch (error) {
+                    this.log('error', 'Alert handler failed', {
+                        alertType: alert.type,
+                        error: error.message
+                    });
+                }
+            }
+        }
+    }
+
+    async inspectThought(thought) {
+        const inspection = {
+            id: thought.id,
+            type: thought.type,
+            timestamp: Date.now(),
+            memory: await this.metrics.getMemoryProfile(thought),
+            traces: await this.collectTraces(thought),
+            resourceUsage: await this.metrics.getResourceUsage(thought),
+            executionGraph: this.generateExecutionGraph(thought),
+            dependencies: await this.analyzeDependencies(thought)
+        };
+
+        this.logs.set(`thought_${thought.id}`, inspection);
+        return inspection;
+    }
+
+    async collectTraces(thought) {
+        return {
+            executionPath: this.captureExecutionPath(thought),
+            functionCalls: await this.traceFunctionCalls(thought),
+            resourceAccess: this.trackResourceAccess(thought),
+            timing: this.measureExecutionTimes(thought)
+        };
+    }
+
+    async traceFunctionCalls(thought) {
+        const calls = [];
+        const originalFunctions = new Map();
+
+        // Store original functions and create proxies
+        for (const key in thought) {
+            if (typeof thought[key] === 'function') {
+                originalFunctions.set(key, thought[key]);
+                thought[key] = new Proxy(thought[key], {
+                    apply: async (target, thisArg, args) => {
+                        const start = performance.now();
+                        const callInfo = {
+                            function: key,
+                            arguments: args.map(arg => this.sanitizeArg(arg)),
+                            timestamp: Date.now()
+                        };
+
+                        try {
+                            const result = await target.apply(thisArg, args);
+                            callInfo.duration = performance.now() - start;
+                            callInfo.status = 'success';
+                            callInfo.result = this.sanitizeArg(result);
+                            return result;
+                        } catch (error) {
+                            callInfo.duration = performance.now() - start;
+                            callInfo.status = 'error';
+                            callInfo.error = error.message;
+                            throw error;
+                        } finally {
+                            calls.push(callInfo);
+                        }
+                    }
+                });
+            }
+        }
+
+        return calls;
+    }
+
+    sanitizeArg(arg) {
+        // Safely stringify arguments and results for logging
+        try {
+            if (arg === undefined) return 'undefined';
+            if (arg === null) return 'null';
+            if (typeof arg === 'function') return 'function';
+            if (typeof arg === 'object') {
+                return JSON.stringify(arg, (key, value) => {
+                    if (typeof value === 'function') return 'function';
+                    if (value instanceof Error) return value.message;
+                    return value;
+                });
+            }
+            return String(arg);
+        } catch (error) {
+            return '[Complex Object]';
+        }
+    }
+
+    captureExecutionPath(thought) {
+        const path = [];
+        let currentNode = thought;
+
+        while (currentNode) {
+            path.push({
+                id: currentNode.id,
+                type: currentNode.type,
+                timestamp: currentNode.timestamp
+            });
+            currentNode = currentNode.parent;
+        }
+
+        return path;
+    }
+
+    trackResourceAccess(thought) {
+        return {
+            memory: this.getMemoryAccess(thought),
+            storage: this.getStorageAccess(thought),
+            network: this.getNetworkAccess(thought)
+        };
+    }
+
+    measureExecutionTimes(thought) {
+        return {
+            total: 0,
+            phases: [],
+            bottlenecks: []
+        };
+    }
+
+    log(level, message, context = {}) {
+        const logEntry = {
+            timestamp: Date.now(),
+            level,
+            message,
+            context
+        };
+
+        // Store in logs map
+        const key = `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        this.logs.set(key, logEntry);
+
+        // Trim old logs if necessary
+        if (this.logs.size > 1000) { // Keep last 1000 logs
+            const oldestKey = Array.from(this.logs.keys())[0];
+            this.logs.delete(oldestKey);
+        }
+
+        return logEntry;
+    }
+
+    clearLogs() {
+        this.logs.clear();
+    }
+
+    getLogsByLevel(level) {
+        return Array.from(this.logs.values())
+            .filter(entry => entry.level === level);
+    }
+
+    setBreakpoint(thoughtId, condition) {
+        this.breakpoints.set(thoughtId, condition);
+    }
+
+    removeBreakpoint(thoughtId) {
+        this.breakpoints.delete(thoughtId);
+    }
+
+    registerDebugHook(event, handler) {
+        if (typeof handler !== 'function') {
+            throw new Error('Debug hook handler must be a function');
+        }
+        this.debugHooks.set(event, handler);
+    }
+
+    getDebugSnapshot() {
+        return {
+            timestamp: Date.now(),
+            logs: Array.from(this.logs.entries()),
+            metrics: this.metrics.getLatestMetrics(),
+            breakpoints: Array.from(this.breakpoints),
+            errorCounts: Array.from(this.errorCount.entries())
+        };
+    }
+
+    generateExecutionGraph(thought) {
+        const graph = {
+            nodes: [],
+            edges: []
+        };
+
+        const visited = new Set();
+
+        const addNode = (node) => {
+            if (visited.has(node.id)) return;
+            visited.add(node.id);
+
+            graph.nodes.push({
+                id: node.id,
+                type: node.type,
+                timestamp: node.timestamp
+            });
+
+            if (node.dependencies) {
+                node.dependencies.forEach(depId => {
+                    graph.edges.push({
+                        from: depId,
+                        to: node.id
+                    });
+                });
+            }
+
+            if (node.children) {
+                node.children.forEach(child => {
+                    addNode(child);
+                    graph.edges.push({
+                        from: node.id,
+                        to: child.id
+                    });
+                });
+            }
+        };
+
+        addNode(thought);
+        return graph;
+    }
+
+    async analyzeDependencies(thought) {
+        const dependencies = {
+            direct: [],
+            indirect: [],
+            circular: []
+        };
+
+        const visited = new Set();
+        const stack = new Set();
+
+        const analyzeDep = async (node) => {
+            if (stack.has(node.id)) {
+                dependencies.circular.push(node.id);
+                return;
+            }
+
+            if (visited.has(node.id)) return;
+
+            stack.add(node.id);
+            visited.add(node.id);
+
+            if (node.dependencies) {
+                for (const depId of node.dependencies) {
+                    dependencies.direct.push({
+                        from: node.id,
+                        to: depId
+                    });
+
+                    const depNode = await this.getThought(depId);
+                    if (depNode) {
+                        await analyzeDep(depNode);
+                    }
+                }
+            }
+
+            stack.delete(node.id);
+        };
+
+        await analyzeDep(thought);
+        return dependencies;
+    }
+
+    async getThought(thoughtId) {
+        // Implementation would depend on how thoughts are stored/retrieved
+        // This is a placeholder
+        return null;
+    }
+
+    getMemoryAccess(thought) {
+        return {
+            reads: [],
+            writes: [],
+            allocations: []
+        };
+    }
+
+    getStorageAccess(thought) {
+        return {
+            reads: [],
+            writes: [],
+            deletes: []
+        };
+    }
+
+    getNetworkAccess(thought) {
+        return {
+            requests: [],
+            responses: [],
+            errors: []
+        };
+    }
+}
+--- End of modules/debug/debugSystem.js ---
+
+
+--- File: modules/debug/index.js ---
+
+// modules/debug/index.js
+export { EnhancedDebugSystem } from './debugSystem';
+export { MetricsCollector } from './metrics/collector';
+--- End of modules/debug/index.js ---
+
+
+
+=== Folder: modules/debug/metrics ===
+
+
+--- File: modules/debug/metrics/collector.js ---
+
+import { AsyncLock } from '../../../concurrency';
+import os from 'os';  // Node.js built-in
+
+class MetricsCollector {
+    constructor(config = {}) {
+        this.metricsHistory = new Map();
+        this.historyLimit = config.historyLimit || 1000;
+        this.samplingInterval = config.samplingInterval || 1000; // 1 second
+        this.retentionPeriod = config.retentionPeriod || 24 * 60 * 60 * 1000; // 24 hours
+        this.baselineWindow = config.baselineWindow || 60 * 60 * 1000; // 1 hour
+        this.alertThresholds = config.alertThresholds || this.getDefaultThresholds();
+        
+        this.baselines = {
+            network: this.initializeBaseline(),
+            disk: this.initializeBaseline(),
+            memory: this.initializeBaseline(),
+            cpu: this.initializeBaseline()
+        };
+
+        this.collectors = new Map();
+        this.intervalId = null;
+        this.isCollecting = false;
+        this.lastCollection = null;
+        this.lock = new AsyncLock();
+        this.initializeCollectors();
+    }
+
+    initializeBaseline() {
+        return {
+            values: [],
+            lastUpdate: Date.now(),
+            mean: 0,
+            standardDeviation: 0
+        };
+    }
+
+    getDefaultThresholds() {
+        return {
+            memory: {
+                usage: 0.9, // 90% memory usage
+                growth: 0.1 // 10% growth rate
+            },
+            cpu: {
+                usage: 0.8, // 80% CPU usage
+                sustained: 0.7 // 70% sustained usage
+            },
+            disk: {
+                usage: 0.95, // 95% disk usage
+                iops: 5000 // IOPS threshold
+            },
+            network: {
+                bandwidth: 0.8, // 80% bandwidth usage
+                errorRate: 0.01 // 1% error rate
+            }
+        };
+    }
+
+    initializeCollectors() {
+        // Memory metrics collector
+        this.collectors.set('memory', async () => {
+            const memoryInfo = process.memoryUsage();
+            return {
+                heapUsed: memoryInfo.heapUsed,
+                heapTotal: memoryInfo.heapTotal,
+                external: memoryInfo.external,
+                rss: memoryInfo.rss,
+                arrayBuffers: memoryInfo.arrayBuffers || 0,
+                usage: memoryInfo.heapUsed / memoryInfo.heapTotal,
+                timestamp: Date.now()
+            };
+        });
+
+        // CPU metrics collector
+        this.collectors.set('cpu', async () => {
+            const startUsage = process.cpuUsage();
+            await new Promise(resolve => setTimeout(resolve, 100));
+            const endUsage = process.cpuUsage(startUsage);
+            const totalUsage = endUsage.user + endUsage.system;
+
+            return {
+                user: endUsage.user,
+                system: endUsage.system,
+                total: totalUsage,
+                percentage: totalUsage / 1000000, // Convert to percentage
+                loadAverage: os.loadavg(),
+                timestamp: Date.now()
+            };
+        });
+
+        // Disk metrics collector
+        this.collectors.set('disk', async () => {
+            try {
+                const stats = await this.collectDiskStats();
+                return {
+                    reads: stats.reads,
+                    writes: stats.writes,
+                    iops: stats.iops,
+                    latency: stats.latency,
+                    utilization: stats.utilization,
+                    timestamp: Date.now()
+                };
+            } catch (error) {
+                console.error('Error collecting disk metrics:', error);
+                return null;
+            }
+        });
+
+        // Network metrics collector
+        this.collectors.set('network', async () => {
+            try {
+                const stats = await this.collectNetworkStats();
+                return {
+                    bytesIn: stats.bytesIn,
+                    bytesOut: stats.bytesOut,
+                    packetsIn: stats.packetsIn,
+                    packetsOut: stats.packetsOut,
+                    errors: stats.errors,
+                    dropped: stats.dropped,
+                    timestamp: Date.now()
+                };
+            } catch (error) {
+                console.error('Error collecting network metrics:', error);
+                return null;
+            }
+        });
+    }
+
+    async start() {
+        if (this.intervalId) {
+            return;
+        }
+
+        this.intervalId = setInterval(
+            () => this.collect().catch(console.error),
+            this.samplingInterval
+        );
+    }
+
+    async stop() {
+        if (this.intervalId) {
+            clearInterval(this.intervalId);
+            this.intervalId = null;
+        }
+    }
+
+    async collect() {
+        return await this.lock.acquire('collect', async () => {
+            if (this.isCollecting) {
+                return;
+            }
+
+            this.isCollecting = true;
+            try {
+                const metrics = await this.collectAll();
+                this.updateHistory(metrics);
+                this.updateBaselines(metrics);
+                await this.checkThresholds(metrics);
+                this.lastCollection = Date.now();
+                return metrics;
+            } finally {
+                this.isCollecting = false;
+            }
+        });
+    }
+
+    async collectAll() {
+        const metrics = {};
+        for (const [name, collector] of this.collectors) {
+            try {
+                metrics[name] = await collector();
+            } catch (error) {
+                console.error(`Error collecting ${name} metrics:`, error);
+                metrics[name] = null;
+            }
+        }
+        return metrics;
+    }
+
+    updateHistory(metrics) {
+        const timestamp = Date.now();
+        this.metricsHistory.set(timestamp, metrics);
+
+        // Clean up old metrics
+        const cutoff = timestamp - this.retentionPeriod;
+        for (const [ts] of this.metricsHistory) {
+            if (ts < cutoff) {
+                this.metricsHistory.delete(ts);
+            } else {
+                break; // Map is ordered by insertion time
+            }
+        }
+
+        // Enforce history limit
+        while (this.metricsHistory.size > this.historyLimit) {
+            const oldestKey = this.metricsHistory.keys().next().value;
+            this.metricsHistory.delete(oldestKey);
+        }
+    }
+
+    updateBaselines(metrics) {
+        const now = Date.now();
+        const types = ['network', 'disk', 'memory', 'cpu'];
+
+        for (const type of types) {
+            if (!metrics[type]) continue;
+
+            const baseline = this.baselines[type];
+            baseline.values.push(metrics[type]);
+
+            // Keep only values within baseline window
+            const cutoff = now - this.baselineWindow;
+            baseline.values = baseline.values.filter(v => v.timestamp >= cutoff);
+
+            // Calculate new baseline statistics
+            if (baseline.values.length > 0) {
+                this.updateBaselineStats(baseline);
+            }
+
+            baseline.lastUpdate = now;
+        }
+    }
+
+    updateBaselineStats(baseline) {
+        // Calculate mean
+        const sum = baseline.values.reduce((acc, val) => acc + (val.usage || 0), 0);
+        baseline.mean = sum / baseline.values.length;
+
+        // Calculate standard deviation
+        const squaredDiffs = baseline.values.map(val => 
+            Math.pow((val.usage || 0) - baseline.mean, 2)
+        );
+        const avgSquaredDiff = squaredDiffs.reduce((acc, val) => acc + val, 0) / squaredDiffs.length;
+        baseline.standardDeviation = Math.sqrt(avgSquaredDiff);
+    }
+
+    async checkThresholds(metrics) {
+        const alerts = [];
+
+        // Check memory thresholds
+        if (metrics.memory) {
+            if (metrics.memory.usage > this.alertThresholds.memory.usage) {
+                alerts.push({
+                    type: 'memory',
+                    severity: 'high',
+                    message: 'Memory usage exceeds threshold',
+                    value: metrics.memory.usage,
+                    threshold: this.alertThresholds.memory.usage
+                });
+            }
+        }
+
+        // Check CPU thresholds
+        if (metrics.cpu) {
+            if (metrics.cpu.percentage > this.alertThresholds.cpu.usage) {
+                alerts.push({
+                    type: 'cpu',
+                    severity: 'high',
+                    message: 'CPU usage exceeds threshold',
+                    value: metrics.cpu.percentage,
+                    threshold: this.alertThresholds.cpu.usage
+                });
+            }
+        }
+
+        // Check disk thresholds
+        if (metrics.disk) {
+            if (metrics.disk.utilization > this.alertThresholds.disk.usage) {
+                alerts.push({
+                    type: 'disk',
+                    severity: 'medium',
+                    message: 'Disk utilization exceeds threshold',
+                    value: metrics.disk.utilization,
+                    threshold: this.alertThresholds.disk.usage
+                });
+            }
+        }
+
+        // Check network thresholds
+        if (metrics.network) {
+            const errorRate = metrics.network.errors / 
+                (metrics.network.packetsIn + metrics.network.packetsOut);
+            if (errorRate > this.alertThresholds.network.errorRate) {
+                alerts.push({
+                    type: 'network',
+                    severity: 'medium',
+                    message: 'Network error rate exceeds threshold',
+                    value: errorRate,
+                    threshold: this.alertThresholds.network.errorRate
+                });
+            }
+        }
+
+        return alerts;
+    }
+
+    async getMetrics(duration) {
+        const now = Date.now();
+        const startTime = duration ? now - duration : 0;
+
+        return Array.from(this.metricsHistory.entries())
+            .filter(([timestamp]) => timestamp >= startTime)
+            .map(([timestamp, metrics]) => ({
+                timestamp,
+                metrics
+            }));
+    }
+
+    async getBaselines() {
+        return this.baselines;
+    }
+
+    async collectDiskStats() {
+        // Implement actual disk stats collection based on your system
+        // This is a placeholder implementation
+        return {
+            reads: Math.floor(Math.random() * 1000),
+            writes: Math.floor(Math.random() * 1000),
+            iops: Math.floor(Math.random() * 5000),
+            latency: Math.random() * 10,
+            utilization: Math.random()
+        };
+    }
+
+    async collectNetworkStats() {
+        // Implement actual network stats collection based on your system
+        // This is a placeholder implementation
+        return {
+            bytesIn: Math.floor(Math.random() * 1000000),
+            bytesOut: Math.floor(Math.random() * 1000000),
+            packetsIn: Math.floor(Math.random() * 10000),
+            packetsOut: Math.floor(Math.random() * 10000),
+            errors: Math.floor(Math.random() * 10),
+            dropped: Math.floor(Math.random() * 10)
+        };
+    }
+
+    async destroy() {
+        await this.stop();
+        this.metricsHistory.clear();
+        this.collectors.clear();
+        this.baselines = null;
+    }
+}
+--- End of modules/debug/metrics/collector.js ---
+
+
+
+=== Folder: modules/errors ===
+
+
+--- File: modules/errors/index.js ---
+
+// modules/errors/index.js
+export { ThoughtError } from './thoughtError';
+--- End of modules/errors/index.js ---
+
+
+--- File: modules/errors/thoughtError.js ---
+
+class ThoughtError extends Error {
+    constructor(code, message, context = {}) {
+        // Call parent constructor
+        super(message);
+
+        // Maintain proper stack trace
+        if (Error.captureStackTrace) {
+            Error.captureStackTrace(this, ThoughtError);
+        }
+
+        // Custom properties
+        this.name = 'ThoughtError';
+        this.code = code;
+        this.timestamp = Date.now();
+        this.context = this.sanitizeContext(context);
+        this.severity = this.calculateSeverity(code);
+        this.retryable = this.isRetryable(code);
+    }
+
+    // Predefined error codes and their properties
+    static ErrorCodes = {
+        // Memory-related errors
+        MemoryLimitExceeded: {
+            severity: 'high',
+            retryable: false,
+            category: 'resource'
+        },
+        MemoryAllocationFailed: {
+            severity: 'high',
+            retryable: true,
+            category: 'resource'
+        },
+
+        // Processing errors
+        InvalidInput: {
+            severity: 'medium',
+            retryable: false,
+            category: 'validation'
+        },
+        ProcessingFailed: {
+            severity: 'medium',
+            retryable: true,
+            category: 'operation'
+        },
+        
+        // System errors
+        SystemOverload: {
+            severity: 'high',
+            retryable: true,
+            category: 'system'
+        },
+        InternalError: {
+            severity: 'high',
+            retryable: false,
+            category: 'system'
+        },
+
+        // Data errors
+        InvalidData: {
+            severity: 'medium',
+            retryable: false,
+            category: 'data'
+        },
+        DataNotFound: {
+            severity: 'low',
+            retryable: false,
+            category: 'data'
+        },
+        DataCorruption: {
+            severity: 'high',
+            retryable: false,
+            category: 'data'
+        },
+
+        // Operation errors
+        OperationTimeout: {
+            severity: 'medium',
+            retryable: true,
+            category: 'operation'
+        },
+        OperationCancelled: {
+            severity: 'low',
+            retryable: true,
+            category: 'operation'
+        },
+        ConcurrencyError: {
+            severity: 'medium',
+            retryable: true,
+            category: 'operation'
+        },
+
+        // State errors
+        InvalidState: {
+            severity: 'medium',
+            retryable: false,
+            category: 'state'
+        },
+        StateTransitionFailed: {
+            severity: 'medium',
+            retryable: true,
+            category: 'state'
+        },
+
+        // Configuration errors
+        InvalidConfiguration: {
+            severity: 'high',
+            retryable: false,
+            category: 'config'
+        },
+        ConfigurationMissing: {
+            severity: 'high',
+            retryable: false,
+            category: 'config'
+        }
+    };
+
+    calculateSeverity(code) {
+        return ThoughtError.ErrorCodes[code]?.severity || 'medium';
+    }
+
+    isRetryable(code) {
+        return ThoughtError.ErrorCodes[code]?.retryable ?? false;
+    }
+
+    getCategory() {
+        return ThoughtError.ErrorCodes[this.code]?.category || 'unknown';
+    }
+
+    sanitizeContext(context) {
+        const sanitized = {};
+        
+        for (const [key, value] of Object.entries(context)) {
+            // Skip null or undefined values
+            if (value == null) continue;
+
+            // Handle different types of values
+            if (typeof value === 'function') {
+                sanitized[key] = '[Function]';
+            } else if (value instanceof Error) {
+                sanitized[key] = {
+                    name: value.name,
+                    message: value.message,
+                    stack: value.stack
+                };
+            } else if (ArrayBuffer.isView(value)) {
+                sanitized[key] = `[${value.constructor.name}]`;
+            } else if (typeof value === 'object') {
+                try {
+                    // Attempt to safely stringify objects
+                    sanitized[key] = JSON.parse(JSON.stringify(value));
+                } catch {
+                    sanitized[key] = '[Complex Object]';
+                }
+            } else {
+                sanitized[key] = value;
+            }
+        }
+
+        return sanitized;
+    }
+
+    toJSON() {
+        return {
+            name: this.name,
+            code: this.code,
+            message: this.message,
+            timestamp: this.timestamp,
+            severity: this.severity,
+            category: this.getCategory(),
+            retryable: this.retryable,
+            context: this.context,
+            stack: this.stack
+        };
+    }
+
+    toString() {
+        return `${this.name}[${this.code}]: ${this.message} (Severity: ${this.severity}, Category: ${this.getCategory()})`;
+    }
+
+    static isThoughtError(error) {
+        return error instanceof ThoughtError;
+    }
+
+    static fromError(error, code = 'InternalError', additionalContext = {}) {
+        const context = {
+            originalError: {
+                name: error.name,
+                message: error.message,
+                stack: error.stack
+            },
+            ...additionalContext
+        };
+
+        return new ThoughtError(code, error.message, context);
+    }
+
+    static wrapError(error, code = 'InternalError', message = null, additionalContext = {}) {
+        if (ThoughtError.isThoughtError(error)) {
+            // If it's already a ThoughtError, just add additional context
+            error.context = {
+                ...error.context,
+                ...additionalContext
+            };
+            return error;
+        }
+
+        return ThoughtError.fromError(error, code, additionalContext);
+    }
+
+    getErrorDetails() {
+        return {
+            code: this.code,
+            severity: this.severity,
+            category: this.getCategory(),
+            retryable: this.retryable,
+            timestamp: this.timestamp,
+            message: this.message,
+            context: this.context
+        };
+    }
+
+    isOfCategory(category) {
+        return this.getCategory() === category;
+    }
+
+    shouldRetry(attemptsMade = 0, maxAttempts = 3) {
+        if (!this.retryable) return false;
+        if (attemptsMade >= maxAttempts) return false;
+        
+        // Additional retry logic based on error category
+        switch (this.getCategory()) {
+            case 'resource':
+                return attemptsMade < 2; // Less retry attempts for resource errors
+            case 'operation':
+                return attemptsMade < maxAttempts;
+            case 'system':
+                return attemptsMade < maxAttempts - 1;
+            default:
+                return this.retryable && attemptsMade < maxAttempts;
+        }
+    }
+
+    getRetryDelay(attemptsMade = 0) {
+        // Exponential backoff with jitter
+        const baseDelay = 1000; // 1 second
+        const maxDelay = 30000; // 30 seconds
+        
+        let delay = baseDelay * Math.pow(2, attemptsMade);
+        delay = Math.min(delay, maxDelay);
+        
+        // Add jitter (±25%)
+        const jitter = delay * 0.25;
+        delay += Math.random() * jitter * 2 - jitter;
+        
+        return Math.floor(delay);
+    }
+}
+--- End of modules/errors/thoughtError.js ---
+
+
+
+=== Folder: modules/memory ===
+
+
+--- File: modules/memory/enhancedMemory.js ---
+
+import { AsyncLock } from '../concurrency';
+import { HybridStorage } from '../storage';
+import { LRUCache } from './cache/lru';
+import { EnhancedVectorStore } from '../vector';
+import { ThoughtError } from '../errors/thoughtError';
+import { CompressionUtil } from '../storage/utils/compression';
+
+class EnhancedMemorySystem {
+    #lock = new AsyncLock();
+
+
+    constructor(config = {}) {
+        this.modelCache = new Map(); 
+        this.shortTermMemory = new HybridStorage({
+            dbName: 'shortTermMemory',
+            maxMemoryItems: config.shortTermLimit || 10000,
+            storeName: 'shortTerm'
+        });
+        this.workingMemory = new LRUCache(config.workingMemorySize || 1000);
+        this.vectorStore = new EnhancedVectorStore();
+        this.memoryLimits = {
+            shortTerm: config.shortTermLimit || 10000,
+            working: config.workingMemoryLimit || 5000,
+            vector: config.vectorLimit || 100000
+        };
+        this.cleanupInterval = config.cleanupInterval || 3600000; // 1 hour
+        this.intervalId = null;
+        this.setupAutoCleanup();
+
+        this.aiConfig = {
+            endpoint: config.aiEndpoint,
+            apiKey: config.apiKey,
+            compressionModel: config.compressionModel,
+            retrievalModel: config.retrievalModel
+        };
+
+        this.lastCleanupAttempt = null;
+        this.isCleaningUp = false;
+        this.cleanupLock = new AsyncLock();
+    }
+
+    async releaseResources() {
+        try {
+            // Release any temporary compression resources
+            await this.cleanupTemporaryResources();
+
+            // Clear any cached data
+            this.modelCache?.clear();
+
+            // Additional resource cleanup as needed
+            await this.vectorStore?.releaseResources();
+            
+            // Release shortTermMemory resources
+            await this.shortTermMemory.destroy();
+        } catch (error) {
+            console.error('Error releasing resources:', error);
+            throw new Error('Failed to release resources: ' + error.message);
+        }
+    }
+
+    setupAutoCleanup() {
+        // Clear existing interval if any
+        if (this.intervalId) {
+            clearInterval(this.intervalId);
+        }
+
+        // Set up new cleanup interval with race condition protection
+        this.intervalId = setInterval(async () => {
+            try {
+                await this.cleanupLock.acquire('cleanup', async () => {
+                    if (this.isCleaningUp) {
+                        return; // Skip if cleanup is already in progress
+                    }
+                    this.isCleaningUp = true;
+                    this.lastCleanupAttempt = Date.now();
+                    await this.performCleanup();
+                    this.isCleaningUp = false;
+                });
+            } catch (error) {
+                console.error('Error during auto cleanup:', error);
+                this.isCleaningUp = false; // Reset flag on error
+            }
+        }, this.cleanupInterval);
+    }
+
+    async destroy() {
+        try {
+            // Clear cleanup interval
+            if (this.intervalId) {
+                clearInterval(this.intervalId);
+                this.intervalId = null;
+            }
+
+            // Clean up vector store
+            await this.vectorStore.destroy();
+
+            // Clear working memory
+            await this.workingMemory.clear();
+
+            // Clear short-term memory
+            await this.shortTermMemory.destroy();
+
+            // Release any held resources
+            await this.releaseResources();
+        } catch (error) {
+            console.error('Error during memory system destruction:', error);
+            throw new Error('Failed to properly destroy memory system: ' + error.message);
+        }
+    }
+
+    async performCleanup() {
+        const now = Date.now();
+
+        try {
+            // Cleanup short-term memory
+            await this.shortTermMemory.vacuum();
+
+            // Enforce working memory size limit
+            while (this.workingMemory.size() > this.memoryLimits.working) {
+                await this.workingMemory.evictOldest();
+            }
+
+            // Trigger vacuum on vector store
+            await this.vectorStore.vacuum().catch(error => {
+                console.error('Error during vector store vacuum:', error);
+                throw error;
+            });
+
+            // Optimize storage if needed
+            await this.shortTermMemory.optimize();
+
+        } catch (error) {
+            console.error('Error during cleanup:', error);
+            throw new Error('Cleanup failed: ' + error.message);
+        }
+    }
+
+    async safeDelete(key, memoryType) {
+        try {
+            switch (memoryType) {
+                case 'shortTerm':
+                    await this.shortTermMemory.delete(key);
+                    break;
+                case 'working':
+                    await this.workingMemory.delete(key);
+                    break;
+                case 'vector':
+                    await this.vectorStore.delete(key);
+                    break;
+                default:
+                    throw new Error(`Unknown memory type: ${memoryType}`);
+            }
+        } catch (error) {
+            console.error(`Error deleting key ${key} from ${memoryType}:`, error);
+            throw error;
+        }
+    }
+
+    async store(key, data, type = 'shortTerm', metadata = {}) {
+        return await this.#lock.acquire('store', async () => {
+            const estimatedSize = this.calculateSize(data);
+            const safetyBuffer = 1.1;
+
+            if (!this.checkMemoryLimits(type, estimatedSize * safetyBuffer)) {
+                throw new ThoughtError(
+                    'MemoryLimitExceeded',
+                    `Memory limit exceeded for ${type}`,
+                    { size: estimatedSize, limit: this.memoryLimits[type] }
+                );
+            }
+
+            const compressedData = await this.compress(data);
+            const enhancedMetadata = {
+                ...metadata,
+                timestamp: Date.now(),
+                type,
+                originalSize: estimatedSize,
+                compressedSize: this.calculateSize(compressedData)
+            };
+
+            switch (type) {
+                case 'shortTerm':
+                    await this.shortTermMemory.set(key, {
+                        data: compressedData,
+                        metadata: enhancedMetadata
+                    }, {
+                        priority: metadata.priority,
+                        compression: true,
+                        tags: metadata.tags
+                    });
+                    break;
+                default:
+                    throw new ThoughtError('InvalidMemoryType', `Unknown memory type: ${type}`);
+            }
+
+            return enhancedMetadata;
+        });
+    }
+
+    async retrieve(key, type = 'shortTerm') {
+        return await this.#lock.acquire('retrieve', async () => {
+            let result;
+            switch (type) {
+                case 'shortTerm':
+                    result = await this.shortTermMemory.get(key);
+                    if (result) {
+                        return await this.decompress(result.data, result.metadata);
+                    }
+                    break;
+                default:
+                    throw new ThoughtError('InvalidMemoryType', `Unknown memory type: ${type}`);
+            }
+            return null;
+        });
+    }
+
+    async compress(data) {
+        if (!this.aiConfig.compressionModel) {
+            return data;
+        }
+
+        try {
+            const response = await fetch(`${this.aiConfig.endpoint}/compress`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${this.aiConfig.apiKey}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    data: data,
+                    model: this.aiConfig.compressionModel
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error(`Compression API request failed with status ${response.status}`);
+            }
+
+            return await response.json();
+        } catch (error) {
+            throw new Error('Compression failed', { cause: error });
+        }
+    }
+
+    async decompress(data, metadata) {
+        if (!this.aiConfig.compressionModel) {
+            return data;
+        }
+
+        try {
+            const response = await fetch(`${this.aiConfig.endpoint}/decompress`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${this.aiConfig.apiKey}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    data: data,
+                    metadata: metadata,
+                    model: this.aiConfig.compressionModel
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error(`Decompression API request failed with status ${response.status}`);
+            }
+
+            const decompressed = await response.json();
+
+            // Validate decompressed data
+            if (!decompressed || typeof decompressed !== 'object') {
+                throw new Error('Invalid decompressed data format');
+            }
+
+            return decompressed;
+        } catch (error) {
+            throw new Error('Decompression failed', { cause: error });
+        }
+    }
+
+    calculateSize(data) {
+        return JSON.stringify(data).length;
+    }
+
+    checkMemoryLimits(type, size) {
+        return size <= this.memoryLimits[type];
+    }
+
+    async getUsageMetrics() {
+        const shortTermMetrics = await this.shortTermMemory.getMetrics();
+        
+        return {
+            shortTerm: {
+                size: shortTermMetrics.totalItems,
+                capacityUsed: shortTermMetrics.totalSize / this.memoryLimits.shortTerm,
+                hitRate: shortTermMetrics.hitRate,
+                averageAccessTime: shortTermMetrics.averageAccessTime
+            },
+            working: {
+                size: this.workingMemory.size(),
+                capacityUsed: this.workingMemory.size() / this.memoryLimits.working
+            },
+            vector: await this.vectorStore.getUsageMetrics(),
+            lastCleanup: this.lastCleanupAttempt,
+            totalEntries: shortTermMetrics.totalItems +
+                this.workingMemory.size() +
+                await this.vectorStore.getEntryCount()
+        };
+    }
+
+    async cleanupTemporaryResources() {
+        await CompressionUtil.cleanupTemporaryResources();
+    }
+}
+--- End of modules/memory/enhancedMemory.js ---
+
+
+--- File: modules/memory/index.js ---
+
+// modules/memory/index.js
+export { EnhancedMemorySystem } from './enhancedMemory';
+export { LRUCache } from './cache/lru';
+--- End of modules/memory/index.js ---
+
+
+
+=== Folder: modules/memory/cache ===
+
+
+--- File: modules/memory/cache/lru.js ---
+
+import { AsyncLock } from '../../concurrency';
+
+class LRUCache {
+    constructor(capacity) {
+        if (!Number.isInteger(capacity) || capacity <= 0) {
+            throw new Error('Cache capacity must be a positive integer');
+        }
+        this.capacity = capacity;
+        this.cache = new Map();
+        this.head = { key: null, value: null, prev: null, next: null };
+        this.tail = { key: null, value: null, prev: this.head, next: null };
+        this.head.next = this.tail;
+        this.lock = new AsyncLock();
+        this.stats = {
+            hits: 0,
+            misses: 0,
+            evictions: 0
+        };
+    }
+
+    async get(key) {
+        return await this.lock.acquire('get', () => {
+            const node = this.cache.get(key);
+            if (node) {
+                this.stats.hits++;
+                this.moveToFront(node);
+                return node.value;
+            }
+            this.stats.misses++;
+            return undefined;
+        });
+    }
+
+    async set(key, value) {
+        return await this.lock.acquire('set', () => {
+            const existingNode = this.cache.get(key);
+
+            if (existingNode) {
+                // Update existing node
+                existingNode.value = value;
+                this.moveToFront(existingNode);
+                return;
+            }
+
+            // Create new node
+            const newNode = {
+                key,
+                value,
+                prev: this.head,
+                next: this.head.next
+            };
+
+            // Add to doubly-linked list
+            this.head.next.prev = newNode;
+            this.head.next = newNode;
+
+            // Add to cache
+            this.cache.set(key, newNode);
+
+            // Check capacity
+            if (this.cache.size > this.capacity) {
+                this.evictOldest();
+            }
+        });
+    }
+
+    async delete(key) {
+        return await this.lock.acquire('delete', () => {
+            const node = this.cache.get(key);
+            if (node) {
+                this.removeNode(node);
+                this.cache.delete(key);
+                return true;
+            }
+            return false;
+        });
+    }
+
+    async clear() {
+        return await this.lock.acquire('clear', () => {
+            this.cache.clear();
+            this.head.next = this.tail;
+            this.tail.prev = this.head;
+            this.resetStats();
+        });
+    }
+
+    async evictOldest() {
+        return await this.lock.acquire('evict', () => {
+            if (this.tail.prev === this.head) {
+                return false; // Cache is empty
+            }
+
+            const oldestNode = this.tail.prev;
+            this.removeNode(oldestNode);
+            this.cache.delete(oldestNode.key);
+            this.stats.evictions++;
+            return true;
+        });
+    }
+
+    moveToFront(node) {
+        // Remove from current position
+        this.removeNode(node);
+
+        // Add to front
+        node.prev = this.head;
+        node.next = this.head.next;
+        this.head.next.prev = node;
+        this.head.next = node;
+    }
+
+    removeNode(node) {
+        node.prev.next = node.next;
+        node.next.prev = node.prev;
+    }
+
+    size() {
+        return this.cache.size;
+    }
+
+    has(key) {
+        return this.cache.has(key);
+    }
+
+    *entries() {
+        let node = this.head.next;
+        while (node !== this.tail) {
+            yield [node.key, node.value];
+            node = node.next;
+        }
+    }
+
+    *keys() {
+        let node = this.head.next;
+        while (node !== this.tail) {
+            yield node.key;
+            node = node.next;
+        }
+    }
+
+    *values() {
+        let node = this.head.next;
+        while (node !== this.tail) {
+            yield node.value;
+            node = node.next;
+        }
+    }
+
+    async getStats() {
+        return await this.lock.acquire('stats', () => ({
+            ...this.stats,
+            size: this.cache.size,
+            capacity: this.capacity,
+            hitRate: this.calculateHitRate(),
+            evictionRate: this.calculateEvictionRate()
+        }));
+    }
+
+    calculateHitRate() {
+        const total = this.stats.hits + this.stats.misses;
+        return total === 0 ? 0 : this.stats.hits / total;
+    }
+
+    calculateEvictionRate() {
+        const total = this.stats.hits + this.stats.misses;
+        return total === 0 ? 0 : this.stats.evictions / total;
+    }
+
+    resetStats() {
+        this.stats = {
+            hits: 0,
+            misses: 0,
+            evictions: 0
+        };
+    }
+
+    async optimize() {
+        return await this.lock.acquire('optimize', () => {
+            // Analyze access patterns and adjust capacity if needed
+            const hitRate = this.calculateHitRate();
+            const evictionRate = this.calculateEvictionRate();
+
+            // If hit rate is high and eviction rate is low, we might be over-provisioned
+            if (hitRate > 0.9 && evictionRate < 0.1) {
+                this.capacity = Math.max(Math.floor(this.capacity * 0.8), 1);
+                while (this.cache.size > this.capacity) {
+                    this.evictOldest();
+                }
+            }
+
+            // If hit rate is low and eviction rate is high, we might need more capacity
+            if (hitRate < 0.5 && evictionRate > 0.5) {
+                this.capacity = Math.min(Math.floor(this.capacity * 1.5), Number.MAX_SAFE_INTEGER);
+            }
+
+            return {
+                newCapacity: this.capacity,
+                hitRate,
+                evictionRate
+            };
+        });
+    }
+
+    async peek(key) {
+        return await this.lock.acquire('peek', () => {
+            const node = this.cache.get(key);
+            return node ? node.value : undefined;
+        });
+    }
+
+    async peekOldest() {
+        return await this.lock.acquire('peekOldest', () => {
+            if (this.tail.prev === this.head) {
+                return undefined;
+            }
+            return {
+                key: this.tail.prev.key,
+                value: this.tail.prev.value
+            };
+        });
+    }
+
+    async peekNewest() {
+        return await this.lock.acquire('peekNewest', () => {
+            if (this.head.next === this.tail) {
+                return undefined;
+            }
+            return {
+                key: this.head.next.key,
+                value: this.head.next.value
+            };
+        });
+    }
+
+    [Symbol.iterator]() {
+        return this.entries();
+    }
+
+    async destroy() {
+        return await this.lock.acquire('destroy', () => {
+            this.clear();
+            this.head = null;
+            this.tail = null;
+            this.cache = null;
+            this.stats = null;
+        });
+    }
+}
+--- End of modules/memory/cache/lru.js ---
+
+
+
+=== Folder: modules/storage ===
+
+
+--- File: modules/storage/hybridStorage.js ---
+
+import { AsyncLock } from '../concurrency';
+import { CompressionUtil } from './utils/compression';
+import { StorageMetrics } from './utils/metrics';
+import { ThoughtError } from '../errors/thoughtError';
+
+class HybridStorage {
+    constructor(options = {}) {
+        this.memoryStore = new Map();
+        this.dbName = options.dbName || 'hybridStorage';
+        this.storeName = options.storeName || 'mainStore';
+        this.maxMemoryItems = options.maxMemoryItems || 10000;
+        this.maxRetries = options.maxRetries || 3;
+        this.retryDelay = options.retryDelay || 1000;
+        this.db = null;
+        this.ready = this.initializeDB();
+        this.lock = new AsyncLock();
+        
+        // Performance metrics
+        this.metrics = {
+            hits: 0,
+            misses: 0,
+            writes: 0,
+            deletes: 0,
+            errors: 0,
+            accessTimes: [], // Array of recent access times
+            maxAccessTimes: 1000 // Keep last 1000 access times
+        };
+    }
+
+    async initializeDB() {
+        let attempt = 0;
+        while (attempt < this.maxRetries) {
+            try {
+                return await new Promise((resolve, reject) => {
+                    const request = indexedDB.open(this.dbName, 1);
+
+                    request.onerror = () => reject(new Error(`Failed to open IndexedDB: ${request.error}`));
+                    
+                    request.onsuccess = () => {
+                        this.db = request.result;
+                        
+                        // Handle connection loss
+                        this.db.onclose = () => {
+                            this.db = null;
+                            this.ready = this.initializeDB();
+                        };
+                        
+                        this.db.onerror = (event) => {
+                            console.error('IndexedDB error:', event.target.error);
+                            this.metrics.errors++;
+                        };
+                        
+                        resolve();
+                    };
+
+                    request.onupgradeneeded = (event) => {
+                        const db = event.target.result;
+                        if (!db.objectStoreNames.contains(this.storeName)) {
+                            const store = db.createObjectStore(this.storeName, { keyPath: 'key' });
+                            store.createIndex('timestamp', 'timestamp', { unique: false });
+                            store.createIndex('priority', 'priority', { unique: false });
+                            store.createIndex('tags', 'tags', { unique: false, multiEntry: true });
+                            store.createIndex('size', 'size', { unique: false });
+                        }
+                    };
+                });
+            } catch (error) {
+                attempt++;
+                if (attempt === this.maxRetries) throw error;
+                await new Promise(resolve => setTimeout(resolve, this.retryDelay * attempt));
+            }
+        }
+    }
+
+    async ensureDBConnection() {
+        if (!this.db) {
+            await this.ready;
+        }
+        if (!this.db) {
+            throw new Error('Database connection not established');
+        }
+    }
+
+    async set(key, value, options = {}) {
+        await this.ensureDBConnection();
+        
+        return this.lock.acquire(`write_${key}`, async () => {
+            const startTime = performance.now();
+            try {
+                const item = {
+                    key,
+                    value,
+                    timestamp: Date.now(),
+                    priority: options.priority || 0,
+                    tags: options.tags || [],
+                    expiry: options.expiry,
+                    size: this.calculateItemSize(value)
+                };
+
+                if (options.compression) {
+                    item.value = await CompressionUtil.compress(value);
+                    item.compressed = true;
+                }
+
+                // Store in memory if high priority or frequently accessed
+                if (this.shouldStoreInMemory(item)) {
+                    this.memoryStore.set(key, item);
+                    this.enforceMemoryLimit();
+                }
+
+                // Store in IndexedDB
+                await this.setInDB(item);
+                this.metrics.writes++;
+                this.recordAccessTime(performance.now() - startTime);
+                
+                return true;
+            } catch (error) {
+                this.metrics.errors++;
+                throw error;
+            }
+        });
+    }
+
+    async get(key) {
+        await this.ensureDBConnection();
+        
+        return this.lock.acquire(`read_${key}`, async () => {
+            const startTime = performance.now();
+            try {
+                // Check memory first
+                if (this.memoryStore.has(key)) {
+                    const item = this.memoryStore.get(key);
+                    if (this.isExpired(item)) {
+                        this.memoryStore.delete(key);
+                        await this.delete(key);
+                        return null;
+                    }
+                    
+                    this.metrics.hits++;
+                    this.recordAccessTime(performance.now() - startTime);
+                    return item.compressed ? 
+                        await CompressionUtil.decompress(item.value) : 
+                        item.value;
+                }
+
+                // Check IndexedDB
+                const item = await this.getFromDB(key);
+                if (!item) {
+                    this.metrics.misses++;
+                    return null;
+                }
+
+                if (this.isExpired(item)) {
+                    await this.delete(key);
+                    return null;
+                }
+
+                // Cache in memory for future access
+                if (this.shouldStoreInMemory(item)) {
+                    this.memoryStore.set(key, item);
+                    this.enforceMemoryLimit();
+                }
+
+                this.metrics.hits++;
+                this.recordAccessTime(performance.now() - startTime);
+                return item.compressed ? 
+                    await CompressionUtil.decompress(item.value) : 
+                    item.value;
+            } catch (error) {
+                this.metrics.errors++;
+                throw error;
+            }
+        });
+    }
+
+    async delete(key) {
+        await this.ensureDBConnection();
+        
+        return this.lock.acquire(`delete_${key}`, async () => {
+            const startTime = performance.now();
+            try {
+                // Remove from memory
+                this.memoryStore.delete(key);
+
+                // Remove from IndexedDB
+                const result = await this.deleteFromDB(key);
+                if (result) {
+                    this.metrics.deletes++;
+                }
+                
+                this.recordAccessTime(performance.now() - startTime);
+                return result;
+            } catch (error) {
+                this.metrics.errors++;
+                throw error;
+            }
+        });
+    }
+
+    async has(key) {
+        await this.ensureDBConnection();
+        
+        const startTime = performance.now();
+        try {
+            // Check memory first
+            if (this.memoryStore.has(key)) {
+                const item = this.memoryStore.get(key);
+                if (!this.isExpired(item)) {
+                    this.recordAccessTime(performance.now() - startTime);
+                    return true;
+                }
+                this.memoryStore.delete(key);
+            }
+
+            // Check IndexedDB
+            const exists = await this.existsInDB(key);
+            this.recordAccessTime(performance.now() - startTime);
+            return exists;
+        } catch (error) {
+            this.metrics.errors++;
+            throw error;
+        }
+    }
+
+    async clear() {
+        await this.ensureDBConnection();
+        
+        return this.lock.acquire('clear', async () => {
+            try {
+                // Clear memory store
+                this.memoryStore.clear();
+
+                // Clear IndexedDB
+                await this.clearDB();
+                return true;
+            } catch (error) {
+                this.metrics.errors++;
+                throw error;
+            }
+        });
+    }
+
+    async query(filter) {
+        await this.ensureDBConnection();
+        
+        return this.lock.acquire('query', async () => {
+            const startTime = performance.now();
+            try {
+                const results = await this.queryDB(filter);
+                this.recordAccessTime(performance.now() - startTime);
+                return results;
+            } catch (error) {
+                this.metrics.errors++;
+                throw error;
+            }
+        });
+    }
+
+    async optimize() {
+        await this.ensureDBConnection();
+        
+        return this.lock.acquire('optimize', async () => {
+            try {
+                // Clear expired items
+                await this.vacuum();
+
+                // Analyze access patterns
+                const accessPatterns = this.analyzeAccessPatterns();
+
+                // Adjust memory store size based on hit rate
+                this.optimizeMemoryStoreSize(accessPatterns);
+
+                // Compact IndexedDB if needed
+                if (accessPatterns.fragmentation > 0.3) { // 30% fragmentation threshold
+                    await this.compactDB();
+                }
+
+                return true;
+            } catch (error) {
+                this.metrics.errors++;
+                throw error;
+            }
+        });
+    }
+
+    async vacuum() {
+        await this.ensureDBConnection();
+        
+        return this.lock.acquire('vacuum', async () => {
+            try {
+                const expiredKeys = [];
+
+                // Check memory store
+                for (const [key, item] of this.memoryStore) {
+                    if (this.isExpired(item)) {
+                        this.memoryStore.delete(key);
+                        expiredKeys.push(key);
+                    }
+                }
+
+                // Check IndexedDB
+                const transaction = this.db.transaction([this.storeName], 'readwrite');
+                const store = transaction.objectStore(this.storeName);
+                const index = store.index('timestamp');
+
+                return new Promise((resolve, reject) => {
+                    index.openCursor().onsuccess = (event) => {
+                        const cursor = event.target.result;
+                        if (cursor) {
+                            const item = cursor.value;
+                            if (this.isExpired(item)) {
+                                cursor.delete();
+                                expiredKeys.push(item.key);
+                            }
+                            cursor.continue();
+                        } else {
+                            resolve(expiredKeys.length);
+                        }
+                    };
+                });
+            } catch (error) {
+                this.metrics.errors++;
+                throw error;
+            }
+        });
+    }
+
+    // Private helper methods
+    async setInDB(item) {
+        return new Promise((resolve, reject) => {
+            const transaction = this.db.transaction([this.storeName], 'readwrite');
+            const store = transaction.objectStore(this.storeName);
+            const request = store.put(item);
+
+            request.onerror = () => reject(new Error(`Failed to store item: ${request.error}`));
+            request.onsuccess = () => resolve(true);
+        });
+    }
+
+    async getFromDB(key) {
+        return new Promise((resolve, reject) => {
+            const transaction = this.db.transaction([this.storeName], 'readonly');
+            const store = transaction.objectStore(this.storeName);
+            const request = store.get(key);
+
+            request.onerror = () => reject(new Error(`Failed to retrieve item: ${request.error}`));
+            request.onsuccess = () => resolve(request.result || null);
+        });
+    }
+
+    async deleteFromDB(key) {
+        return new Promise((resolve, reject) => {
+            const transaction = this.db.transaction([this.storeName], 'readwrite');
+            const store = transaction.objectStore(this.storeName);
+            const request = store.delete(key);
+
+            request.onerror = () => reject(new Error(`Failed to delete item: ${request.error}`));
+            request.onsuccess = () => resolve(true);
+        });
+    }
+
+    async existsInDB(key) {
+        return new Promise((resolve, reject) => {
+            const transaction = this.db.transaction([this.storeName], 'readonly');
+            const store = transaction.objectStore(this.storeName);
+            const request = store.count(key);
+
+            request.onerror = () => reject(new Error(`Failed to check item existence: ${request.error}`));
+            request.onsuccess = () => resolve(request.result > 0);
+        });
+    }
+
+    async clearDB() {
+        return new Promise((resolve, reject) => {
+            const transaction = this.db.transaction([this.storeName], 'readwrite');
+            const store = transaction.objectStore(this.storeName);
+            const request = store.clear();
+
+            request.onerror = () => reject(new Error(`Failed to clear store: ${request.error}`));
+            request.onsuccess = () => resolve(true);
+        });
+    }
+
+    async queryDB(filter) {
+        return new Promise((resolve, reject) => {
+            const transaction = this.db.transaction([this.storeName], 'readonly');
+            const store = transaction.objectStore(this.storeName);
+            const results = new Map();
+            let count = 0;
+
+            let request;
+            if (filter.tags && filter.tags.length > 0) {
+                const tagIndex = store.index('tags');
+                request = tagIndex.openCursor();
+            } else if (filter.minPriority !== undefined) {
+                const priorityIndex = store.index('priority');
+                request = priorityIndex.openCursor(IDBKeyRange.lowerBound(filter.minPriority));
+            } else {
+                request = store.openCursor();
+            }
+
+            request.onerror = () => reject(new Error(`Query failed: ${request.error}`));
+            request.onsuccess = (event) => {
+                const cursor = event.target.result;
+                if (cursor) {
+                    const item = cursor.value;
+                    if (this.matchesFilter(item, filter) && !this.isExpired(item)) {
+                        results.set(item.key, item.value);
+                        count++;
+                    }
+                    cursor.continue();
+                } else {
+                    resolve({
+                        items: results,
+                        totalCount: count,
+                        metrics: {
+                            executionTime: Date.now() - transaction.startTime,
+                            itemsScanned: count,
+                            resultSize: results.size
+                        }
+                    });
+                }
+            };
+        });
+    }
+
+    async compactDB() {
+        await this.ensureDBConnection();
+        
+        return this.lock.acquire('compact', async () => {
+            try {
+                // Create a new database with the same data but defragmented
+                const tempDBName = `${this.dbName}_temp`;
+                
+                // Get all current data
+                const allData = await this.getAllItems();
+                
+                // Close current connection
+                this.db.close();
+                
+                // Delete current database
+                await new Promise((resolve, reject) => {
+                    const deleteRequest = indexedDB.deleteDatabase(this.dbName);
+                    deleteRequest.onerror = () => reject(new Error('Failed to delete old database'));
+                    deleteRequest.onsuccess = () => resolve();
+                });
+                
+                // Reinitialize database
+                await this.initializeDB();
+                
+                // Reinsert all data
+                for (const item of allData) {
+                    await this.setInDB(item);
+                }
+                
+                return true;
+            } catch (error) {
+                this.metrics.errors++;
+                throw new Error(`Database compaction failed: ${error.message}`);
+            }
+        });
+    }
+
+    async getAllItems() {
+        return new Promise((resolve, reject) => {
+            const items = [];
+            const transaction = this.db.transaction([this.storeName], 'readonly');
+            const store = transaction.objectStore(this.storeName);
+            const request = store.openCursor();
+
+            request.onerror = () => reject(new Error('Failed to get all items'));
+            request.onsuccess = (event) => {
+                const cursor = event.target.result;
+                if (cursor) {
+                    if (!this.isExpired(cursor.value)) {
+                        items.push(cursor.value);
+                    }
+                    cursor.continue();
+                } else {
+                    resolve(items);
+                }
+            };
+        });
+    }
+
+    isExpired(item) {
+        return item.expiry && Date.now() > item.timestamp + item.expiry;
+    }
+
+    shouldStoreInMemory(item) {
+        if (!item) return false;
+        
+        // Always store high priority items
+        if (item.priority > 0) return true;
+        
+        // Don't store large items
+        if (item.size > 100000) return false; // 100KB limit
+        
+        // Store recently accessed items
+        const isRecent = Date.now() - item.timestamp < 300000; // 5 minutes
+        
+        // Store frequently accessed items
+        const accessCount = this.getAccessCount(item.key);
+        const isFrequent = accessCount > 5;
+        
+        return isRecent || isFrequent;
+    }
+
+    getAccessCount(key) {
+        // This would be implemented with a proper access tracking system
+        // For now, return 0 to keep the implementation simple
+        return 0;
+    }
+
+    enforceMemoryLimit() {
+        if (this.memoryStore.size <= this.maxMemoryItems) return;
+
+        // Sort items by priority and last access
+        const items = Array.from(this.memoryStore.entries())
+            .map(([key, item]) => ({
+                key,
+                priority: item.priority,
+                lastAccess: item.timestamp
+            }))
+            .sort((a, b) => {
+                // Sort by priority first, then by last access time
+                if (a.priority !== b.priority) {
+                    return a.priority - b.priority;
+                }
+                return a.lastAccess - b.lastAccess;
+            });
+
+        // Remove lowest priority/least recently used items
+        while (this.memoryStore.size > this.maxMemoryItems) {
+            const item = items.shift();
+            if (item) {
+                this.memoryStore.delete(item.key);
+            }
+        }
+    }
+
+    calculateItemSize(value) {
+        if (typeof value === 'string') {
+            return value.length * 2; // Approximate UTF-16 string size
+        }
+        return JSON.stringify(value).length * 2;
+    }
+
+    recordAccessTime(duration) {
+        this.metrics.accessTimes.push(duration);
+        if (this.metrics.accessTimes.length > this.metrics.maxAccessTimes) {
+            this.metrics.accessTimes.shift();
+        }
+    }
+
+    analyzeAccessPatterns() {
+        const now = Date.now();
+        const analysis = {
+            averageAccessTime: 0,
+            hitRate: 0,
+            fragmentation: 0
+        };
+
+        // Calculate average access time
+        if (this.metrics.accessTimes.length > 0) {
+            analysis.averageAccessTime = this.metrics.accessTimes.reduce((a, b) => a + b, 0) 
+                / this.metrics.accessTimes.length;
+        }
+
+        // Calculate hit rate
+        const totalAccesses = this.metrics.hits + this.metrics.misses;
+        if (totalAccesses > 0) {
+            analysis.hitRate = this.metrics.hits / totalAccesses;
+        }
+
+        // Estimate fragmentation
+        analysis.fragmentation = this.estimateFragmentation();
+
+        return analysis;
+    }
+
+    async estimateFragmentation() {
+        try {
+            const stats = await this.getStorageStats();
+            return 1 - (stats.usedSize / stats.totalSize);
+        } catch {
+            return 0;
+        }
+    }
+
+    async getStorageStats() {
+        return new Promise((resolve, reject) => {
+            const transaction = this.db.transaction([this.storeName], 'readonly');
+            const store = transaction.objectStore(this.storeName);
+            const countRequest = store.count();
+            let totalSize = 0;
+            let usedSize = 0;
+
+            countRequest.onsuccess = () => {
+                const cursor = store.openCursor();
+                cursor.onsuccess = (event) => {
+                    const cursor = event.target.result;
+                    if (cursor) {
+                        const item = cursor.value;
+                        usedSize += this.calculateItemSize(item.value);
+                        cursor.continue();
+                    } else {
+                        resolve({
+                            totalSize: store.count * 1000, // Rough estimate
+                            usedSize: usedSize
+                        });
+                    }
+                };
+            };
+            countRequest.onerror = () => reject(new Error('Failed to get storage stats'));
+        });
+    }
+
+    optimizeMemoryStoreSize() {
+        const analysis = this.analyzeAccessPatterns();
+        
+        // Adjust memory store size based on hit rate
+        if (analysis.hitRate > 0.8 && this.metrics.errors < 100) {
+            this.maxMemoryItems = Math.min(
+                this.maxMemoryItems * 1.2, // Increase by 20%
+                100000 // Hard limit
+            );
+        } else if (analysis.hitRate < 0.4 || this.metrics.errors > 1000) {
+            this.maxMemoryItems = Math.max(
+                this.maxMemoryItems * 0.8, // Decrease by 20%
+                1000 // Minimum size
+            );
+        }
+    }
+
+    async destroy() {
+        await this.ensureDBConnection();
+        
+        try {
+            // Clear memory store
+            this.memoryStore.clear();
+            
+            // Close database connection
+            this.db.close();
+            
+            // Delete database
+            await new Promise((resolve, reject) => {
+                const request = indexedDB.deleteDatabase(this.dbName);
+                request.onerror = () => reject(new Error('Failed to delete database'));
+                request.onsuccess = () => resolve();
+            });
+            
+            return true;
+        } catch (error) {
+            throw new Error(`Failed to destroy storage: ${error.message}`);
+        }
+    }
+
+    matchesFilter(item, filter) {
+        if (!item) return false;
+
+        if (filter.tags && !filter.tags.every(tag => item.tags.includes(tag))) {
+            return false;
+        }
+
+        if (filter.createdAfter && item.timestamp < filter.createdAfter.getTime()) {
+            return false;
+        }
+
+        if (filter.createdBefore && item.timestamp > filter.createdBefore.getTime()) {
+            return false;
+        }
+
+        if (filter.minPriority !== undefined && item.priority < filter.minPriority) {
+            return false;
+        }
+
+        if (filter.maxSize !== undefined && item.size > filter.maxSize) {
+            return false;
+        }
+
+        return true;
+    }
+}
+--- End of modules/storage/hybridStorage.js ---
+
+
+--- File: modules/storage/index.js ---
+
+// modules/storage/index.js
+export { HybridStorage } from './hybridStorage';
+export { CompressionUtil } from './utils/compression';
+export { StorageMetrics } from './utils/metrics';
+--- End of modules/storage/index.js ---
+
+
+
+=== Folder: modules/storage/utils ===
+
+
+--- File: modules/storage/utils/compression.js ---
+
+class CompressionUtil {
+    // LZ77-based compression algorithm implementation
+    static async compress(data) {
+        // Convert data to string if needed
+        const stringData = typeof data === 'string' ? data : JSON.stringify(data);
+
+        // Convert string to Uint8Array for processing
+        const textEncoder = new TextEncoder();
+        const input = textEncoder.encode(stringData);
+
+        const compressed = [];
+        let pos = 0;
+
+        while (pos < input.length) {
+            const match = this.findLongestMatch(input, pos);
+
+            if (match.length > 3) { // Only use matches longer than 3 bytes
+                // Store as (distance, length) pair
+                compressed.push([match.distance, match.length]);
+                pos += match.length;
+            } else {
+                // Store literal byte
+                compressed.push(input[pos]);
+                pos++;
+            }
+        }
+
+        // Convert compressed data to Uint8Array
+        return this.encodeCompressed(compressed);
+    }
+
+    static async decompress(compressedData) {
+        // Validate input
+        if (!(compressedData instanceof Uint8Array)) {
+            throw new Error('Invalid compressed data format');
+        }
+
+        const decoded = this.decodeCompressed(compressedData);
+        const decompressed = [];
+        const maxSize = 1024 * 1024 * 1024; // 1GB safety limit
+
+        for (const token of decoded) {
+            if (decompressed.length > maxSize) {
+                throw new Error('Decompressed data exceeds size limit');
+            }
+
+            if (Array.isArray(token)) {
+                const [distance, length] = token;
+
+                // Validate distance and length
+                if (distance <= 0 || distance > decompressed.length) {
+                    throw new Error('Invalid back-reference distance');
+                }
+                if (length <= 0 || length > 1024 * 64) { // 64KB max match length
+                    throw new Error('Invalid match length');
+                }
+
+                const start = decompressed.length - distance;
+                // Safe copy with bounds checking
+                for (let i = 0; i < length; i++) {
+                    if (start + i >= decompressed.length) {
+                        throw new Error('Invalid back-reference');
+                    }
+                    decompressed.push(decompressed[start + i]);
+                }
+            } else {
+                // Validate literal byte
+                if (!Number.isInteger(token) || token < 0 || token > 255) {
+                    throw new Error('Invalid literal byte');
+                }
+                decompressed.push(token);
+            }
+        }
+
+        return new TextDecoder().decode(new Uint8Array(decompressed));
+    }
+
+    // Helper method to find longest matching sequence
+    static findLongestMatch(data, currentPos) {
+        // Input validation
+        if (!data || !data.length || currentPos < 0 || currentPos >= data.length) {
+            throw new Error('Invalid input parameters for findLongestMatch');
+        }
+
+        const windowSize = 1024;
+        const maxLength = 258;
+        const searchStart = Math.max(0, currentPos - windowSize);
+        const remainingLength = data.length - currentPos;
+
+        let bestLength = 0;
+        let bestDistance = 0;
+
+        // Bounds checking
+        for (let i = searchStart; i < currentPos; i++) {
+            let length = 0;
+            
+            // Safe length checking
+            while (
+                length < maxLength &&
+                length < remainingLength &&
+                i + length < currentPos &&
+                data[i + length] === data[currentPos + length]
+            ) {
+                length++;
+            }
+
+            if (length > bestLength) {
+                bestLength = length;
+                bestDistance = currentPos - i;
+            }
+        }
+
+        return { length: bestLength, distance: bestDistance };
+    }
+
+    // Add cleanup method for temporary resources
+    static async cleanupTemporaryResources() {
+        try {
+            // Implementation depends on what temporary resources are used
+            // For example, clearing any temporary buffers or file handles
+            this.clearTempBuffers();
+            await this.releaseTempFiles();
+        } catch (error) {
+            console.error('Error cleaning up compression resources:', error);
+            throw new Error('Failed to cleanup compression resources: ' + error.message);
+        }
+    }
+
+    // Helper method to encode compressed data
+    static encodeCompressed(compressed) {
+        // Calculate total size needed
+        let size = 0;
+        compressed.forEach(token => {
+            size += Array.isArray(token) ? 5 : 2; // 5 bytes for match, 2 for literal
+        });
+
+        const result = new Uint8Array(size);
+        let pos = 0;
+
+        compressed.forEach(token => {
+            if (Array.isArray(token)) {
+                // Mark as match with flag byte 1
+                result[pos++] = 1;
+                // Store distance (2 bytes)
+                result[pos++] = token[0] >> 8;
+                result[pos++] = token[0] & 0xFF;
+                // Store length (2 bytes)
+                result[pos++] = token[1] >> 8;
+                result[pos++] = token[1] & 0xFF;
+            } else {
+                // Mark as literal with flag byte 0
+                result[pos++] = 0;
+                // Store literal byte
+                result[pos++] = token;
+            }
+        });
+
+        return result;
+    }
+
+    // Helper method to decode compressed data
+    static decodeCompressed(data) {
+        const result = [];
+        let pos = 0;
+
+        while (pos < data.length) {
+            if (data[pos] === 1) {
+                // Read match
+                pos++;
+                const distance = (data[pos] << 8) | data[pos + 1];
+                const length = (data[pos + 2] << 8) | data[pos + 3];
+                result.push([distance, length]);
+                pos += 4;
+            } else {
+                // Read literal
+                pos++;
+                result.push(data[pos]);
+                pos++;
+            }
+        }
+
+        return result;
+    }
+}
+--- End of modules/storage/utils/compression.js ---
+
+
+--- File: modules/storage/utils/metrics.js ---
+
+class StorageMetrics {
+    constructor(config = {}) {
+        this.metrics = {
+            hits: 0,
+            misses: 0,
+            writes: 0,
+            deletes: 0,
+            errors: 0,
+            totalSize: 0,
+            itemCount: 0
+        };
+
+        this.accessTimes = [];
+        this.maxAccessTimes = config.maxAccessTimes || 1000;
+        this.sizeThreshold = config.sizeThreshold || 100000; // 100KB
+        this.fragmentationThreshold = config.fragmentationThreshold || 0.3; // 30%
+        
+        // Performance tracking
+        this.performanceMetrics = {
+            averageAccessTime: 0,
+            peakAccessTime: 0,
+            lastOptimization: Date.now(),
+            fragmentationLevel: 0
+        };
+    }
+
+    recordHit() {
+        this.metrics.hits++;
+    }
+
+    recordMiss() {
+        this.metrics.misses++;
+    }
+
+    recordWrite() {
+        this.metrics.writes++;
+    }
+
+    recordDelete() {
+        this.metrics.deletes++;
+    }
+
+    recordError() {
+        this.metrics.errors++;
+    }
+
+    recordAccessTime(duration) {
+        this.accessTimes.push({
+            timestamp: Date.now(),
+            duration
+        });
+
+        // Update peak access time
+        this.performanceMetrics.peakAccessTime = Math.max(
+            this.performanceMetrics.peakAccessTime,
+            duration
+        );
+
+        // Maintain size limit
+        while (this.accessTimes.length > this.maxAccessTimes) {
+            this.accessTimes.shift();
+        }
+
+        // Update average
+        const sum = this.accessTimes.reduce((acc, val) => acc + val.duration, 0);
+        this.performanceMetrics.averageAccessTime = sum / this.accessTimes.length;
+    }
+
+    updateSize(itemSize, isAddition = true) {
+        if (isAddition) {
+            this.metrics.totalSize += itemSize;
+            this.metrics.itemCount++;
+        } else {
+            this.metrics.totalSize = Math.max(0, this.metrics.totalSize - itemSize);
+            this.metrics.itemCount = Math.max(0, this.metrics.itemCount - 1);
+        }
+    }
+
+    calculateItemSize(value) {
+        if (typeof value === 'string') {
+            return value.length * 2; // Approximate UTF-16 string size
+        }
+        return JSON.stringify(value).length * 2;
+    }
+
+    getHitRate() {
+        const total = this.metrics.hits + this.metrics.misses;
+        return total === 0 ? 0 : this.metrics.hits / total;
+    }
+
+    getWriteRate() {
+        const total = this.metrics.writes + this.metrics.deletes;
+        return total === 0 ? 0 : this.metrics.writes / total;
+    }
+
+    getErrorRate() {
+        const total = this.getTotalOperations();
+        return total === 0 ? 0 : this.metrics.errors / total;
+    }
+
+    getTotalOperations() {
+        return this.metrics.hits + 
+               this.metrics.misses + 
+               this.metrics.writes + 
+               this.metrics.deletes;
+    }
+
+    getPerformanceMetrics() {
+        return {
+            ...this.performanceMetrics,
+            hitRate: this.getHitRate(),
+            writeRate: this.getWriteRate(),
+            errorRate: this.getErrorRate(),
+            averageItemSize: this.getAverageItemSize(),
+            utilizationRate: this.getUtilizationRate()
+        };
+    }
+
+    getAverageItemSize() {
+        return this.metrics.itemCount === 0 ? 
+            0 : 
+            this.metrics.totalSize / this.metrics.itemCount;
+    }
+
+    getUtilizationRate() {
+        // Calculate storage utilization (used space vs. allocated space)
+        return this.metrics.totalSize / (this.metrics.itemCount * this.getAverageItemSize());
+    }
+
+    analyzeAccessPatterns() {
+        const now = Date.now();
+        const recentAccesses = this.accessTimes.filter(
+            access => now - access.timestamp < 3600000 // Last hour
+        );
+
+        return {
+            averageAccessTime: this.performanceMetrics.averageAccessTime,
+            hitRate: this.getHitRate(),
+            recentAccessCount: recentAccesses.length,
+            writeRate: this.getWriteRate(),
+            errorRate: this.getErrorRate(),
+            fragmentation: this.calculateFragmentation()
+        };
+    }
+
+    shouldOptimize() {
+        const analysis = this.analyzeAccessPatterns();
+        
+        return (
+            analysis.hitRate < 0.5 || // Low hit rate
+            analysis.fragmentation > this.fragmentationThreshold || // High fragmentation
+            analysis.errorRate > 0.05 || // High error rate
+            this.performanceMetrics.averageAccessTime > 100 // Slow access times
+        );
+    }
+
+    calculateFragmentation() {
+        if (this.metrics.itemCount === 0) return 0;
+
+        // Calculate theoretical minimum space needed
+        const idealSpace = this.metrics.itemCount * this.getAverageItemSize();
+        
+        // Compare with actual space used
+        return Math.max(0, 1 - (idealSpace / this.metrics.totalSize));
+    }
+
+    reset() {
+        this.metrics = {
+            hits: 0,
+            misses: 0,
+            writes: 0,
+            deletes: 0,
+            errors: 0,
+            totalSize: 0,
+            itemCount: 0
+        };
+        
+        this.accessTimes = [];
+        this.performanceMetrics = {
+            averageAccessTime: 0,
+            peakAccessTime: 0,
+            lastOptimization: Date.now(),
+            fragmentationLevel: 0
+        };
+    }
+
+    getMetricsSummary() {
+        return {
+            metrics: { ...this.metrics },
+            performance: this.getPerformanceMetrics(),
+            analysis: this.analyzeAccessPatterns(),
+            timestamp: Date.now()
+        };
+    }
+}
+--- End of modules/storage/utils/metrics.js ---
+
+
+
+=== Folder: modules/vector ===
+
+
+--- File: modules/vector/index.js ---
+
+// modules/vector/index.js
+export { EnhancedVectorStore } from './vectorStore';
+export { VectorIndex } from './vectorIndex';
+export { RandomProjectionTree } from './utils/projectionTree';
+export { VectorSimilarity } from './utils/similarity';
+--- End of modules/vector/index.js ---
+
+
+--- File: modules/vector/vectorIndex.js ---
+
+import { AsyncLock } from '../../concurrency';
+import { RandomProjectionTree } from './utils/projectionTree';
+import { ThoughtError } from '../errors/thoughtError';
+
+class VectorIndex {
+    constructor(dimensions = 128, numTrees = 10, maxLeafSize = 10) {
+        this.dimensions = dimensions;
+        this.numTrees = numTrees;
+        this.maxLeafSize = maxLeafSize;
+        this.trees = [];
+        this.initializeTrees();
+        this.vectorCache = new Map();
+        this.lookupTable = new Map();
+        this.indexLock = new AsyncLock();
+        this.maintenanceInterval = null;
+        this.lastMaintenance = Date.now();
+    }
+
+    async initializeTrees() {
+        try {
+            this.trees = Array.from({ length: this.numTrees }, () => 
+                new RandomProjectionTree(this.dimensions, this.maxLeafSize)
+            );
+        } catch (error) {
+            console.error('Failed to initialize trees:', error);
+            throw new Error('Vector index initialization failed: ' + error.message);
+        }
+    }
+
+    async add(key, embedding) {
+        return await this.indexLock.acquire('add', async () => {
+            try {
+                // Validate input
+                if (!key || !embedding) {
+                    throw new Error('Invalid input: key and embedding are required');
+                }
+                if (embedding.length !== this.dimensions) {
+                    throw new Error(`Invalid embedding dimensions: expected ${this.dimensions}, got ${embedding.length}`);
+                }
+
+                // Normalize the embedding
+                const normalizedEmbedding = await this.normalizeVector(embedding);
+
+                // Add to all trees
+                await Promise.all(this.trees.map(tree => 
+                    tree.insert(key, normalizedEmbedding)
+                ));
+
+                // Update lookup table
+                this.lookupTable.set(key, {
+                    timestamp: Date.now(),
+                    embedding: normalizedEmbedding
+                });
+
+                // Cache the normalized vector
+                this.vectorCache.set(key, normalizedEmbedding);
+
+                return true;
+            } catch (error) {
+                console.error('Error adding vector:', error);
+                throw new Error('Failed to add vector: ' + error.message);
+            }
+        });
+    }
+
+    async search(queryEmbedding, limit = 5, similarityThreshold = 0.5) {
+        try {
+            // Validate input
+            if (!queryEmbedding || queryEmbedding.length !== this.dimensions) {
+                throw new Error('Invalid query embedding');
+            }
+
+            // Normalize query vector
+            const normalizedQuery = await this.normalizeVector(queryEmbedding);
+
+            // Search in all trees
+            const results = new Map();
+            await Promise.all(this.trees.map(async tree => {
+                const treeResults = await tree.search(normalizedQuery, limit * 2);
+                treeResults.forEach(key => {
+                    results.set(key, (results.get(key) || 0) + 1);
+                });
+            }));
+
+            // Calculate actual similarities for top candidates
+            const similarities = await Promise.all(
+                Array.from(results.entries()).map(async ([key, count]) => {
+                    const storedVector = this.vectorCache.get(key);
+                    if (!storedVector) return null;
+                    
+                    const similarity = await this.calculateCosineSimilarity(
+                        normalizedQuery,
+                        storedVector
+                    );
+                    return { key, similarity, count };
+                })
+            );
+
+            // Filter, sort and return top results
+            return similarities
+                .filter(result => result && result.similarity >= similarityThreshold)
+                .sort((a, b) => {
+                    // Primary sort by similarity
+                    const simDiff = b.similarity - a.similarity;
+                    if (Math.abs(simDiff) > 0.01) return simDiff;
+                    // Secondary sort by tree occurrence count
+                    return b.count - a.count;
+                })
+                .slice(0, limit)
+                .map(result => ({
+                    key: result.key,
+                    similarity: result.similarity
+                }));
+
+        } catch (error) {
+            console.error('Error during vector search:', error);
+            throw new Error('Vector search failed: ' + error.message);
+        }
+    }
+
+    async delete(key) {
+        return await this.indexLock.acquire('delete', async () => {
+            try {
+                // Remove from all trees
+                await Promise.all(this.trees.map(tree => tree.delete(key)));
+
+                // Clear from cache and lookup table
+                this.vectorCache.delete(key);
+                this.lookupTable.delete(key);
+
+                return true;
+            } catch (error) {
+                console.error('Error deleting vector:', error);
+                throw new Error('Failed to delete vector: ' + error.message);
+            }
+        });
+    }
+
+    async update(key, newEmbedding) {
+        return await this.indexLock.acquire('update', async () => {
+            try {
+                await this.delete(key);
+                return await this.add(key, newEmbedding);
+            } catch (error) {
+                console.error('Error updating vector:', error);
+                throw new Error('Failed to update vector: ' + error.message);
+            }
+        });
+    }
+
+    async normalize(embedding) {
+        return await this.normalizeVector(embedding);
+    }
+
+    async maintenance() {
+        return await this.indexLock.acquire('maintenance', async () => {
+            try {
+                // Rebuild trees that are unbalanced
+                await this.rebuildUnbalancedTrees();
+
+                // Clean up old entries
+                await this.cleanupOldEntries();
+
+                // Update maintenance timestamp
+                this.lastMaintenance = Date.now();
+            } catch (error) {
+                console.error('Error during maintenance:', error);
+                throw new Error('Maintenance failed: ' + error.message);
+            }
+        });
+    }
+
+    async rebuildUnbalancedTrees() {
+        const unbalancedTrees = this.trees.filter(tree => tree.needsRebalancing());
+        if (unbalancedTrees.length === 0) return;
+
+        // Get all vectors
+        const vectors = Array.from(this.lookupTable.entries()).map(([key, data]) => ({
+            key,
+            embedding: data.embedding
+        }));
+
+        // Rebuild unbalanced trees
+        await Promise.all(unbalancedTrees.map(async tree => {
+            const newTree = new RandomProjectionTree(this.dimensions, this.maxLeafSize);
+            for (const vector of vectors) {
+                await newTree.insert(vector.key, vector.embedding);
+            }
+            const treeIndex = this.trees.indexOf(tree);
+            this.trees[treeIndex] = newTree;
+        }));
+    }
+
+    async cleanupOldEntries() {
+        const now = Date.now();
+        const maxAge = 30 * 24 * 60 * 60 * 1000; // 30 days
+
+        const oldKeys = Array.from(this.lookupTable.entries())
+            .filter(([_, data]) => now - data.timestamp > maxAge)
+            .map(([key]) => key);
+
+        await Promise.all(oldKeys.map(key => this.delete(key)));
+    }
+
+    async normalizeVector(vector) {
+        let norm = 0;
+        for (let i = 0; i < vector.length; i++) {
+            norm += vector[i] * vector[i];
+        }
+        norm = Math.sqrt(norm);
+
+        if (norm === 0) {
+            throw new Error('Cannot normalize zero vector');
+        }
+
+        return new Float32Array(vector.map(v => v / norm));
+    }
+
+    async calculateCosineSimilarity(a, b) {
+        let dotProduct = 0;
+        for (let i = 0; i < a.length; i++) {
+            dotProduct += a[i] * b[i];
+        }
+        return Math.max(-1, Math.min(1, dotProduct));
+    }
+
+    async destroy() {
+        try {
+            // Clear maintenance interval if exists
+            if (this.maintenanceInterval) {
+                clearInterval(this.maintenanceInterval);
+                this.maintenanceInterval = null;
+            }
+
+            // Destroy all trees
+            await Promise.all(this.trees.map(tree => tree.destroy()));
+
+            // Clear caches
+            this.vectorCache.clear();
+            this.lookupTable.clear();
+
+            // Clear arrays
+            this.trees = [];
+
+            return true;
+        } catch (error) {
+            console.error('Error destroying vector index:', error);
+            throw new Error('Failed to destroy vector index: ' + error.message);
+        }
+    }
+
+    async getStats() {
+        return {
+            numTrees: this.trees.length,
+            numVectors: this.lookupTable.size,
+            dimensions: this.dimensions,
+            lastMaintenance: this.lastMaintenance,
+            cacheSize: this.vectorCache.size,
+            treeStats: await Promise.all(this.trees.map(tree => tree.getStats()))
+        };
+    }
+}
+--- End of modules/vector/vectorIndex.js ---
+
+
+--- File: modules/vector/vectorStoreBase.js ---
+
+export class VectorStore {
+    /**
+     * @abstract
+     * Generate an embedding for the given data
+     * @param {*} data - Data to generate embedding for
+     * @returns {Promise<Float32Array>} Generated embedding
+     */
+    async generateEmbedding(data) {
+        throw new Error('generateEmbedding must be implemented');
+    }
+
+    /**
+     * @abstract
+     * Search for similar vectors
+     * @param {Float32Array} queryEmbedding - Query vector
+     * @param {number} limit - Maximum number of results
+     * @param {number} similarityThreshold - Minimum similarity score
+     * @returns {Promise<Array<{key: string, similarity: number}>>}
+     */
+    async search(queryEmbedding, limit, similarityThreshold) {
+        throw new Error('search must be implemented');
+    }
+
+    /**
+     * @abstract
+     * Add a vector to the store
+     * @param {string} key - Unique identifier
+     * @param {Float32Array} embedding - Vector to store
+     * @returns {Promise<void>}
+     */
+    async add(key, embedding) {
+        throw new Error('add must be implemented');
+    }
+
+    /**
+     * @abstract
+     * Delete a vector from the store
+     * @param {string} key - Key to delete
+     * @returns {Promise<boolean>} True if deleted, false if not found
+     */
+    async delete(key) {
+        throw new Error('delete must be implemented');
+    }
+
+    /**
+     * @abstract
+     * Clear all vectors from the store
+     * @returns {Promise<void>}
+     */
+    async clear() {
+        throw new Error('clear must be implemented');
+    }
+
+    /**
+     * @abstract
+     * Get the number of vectors in the store
+     * @returns {Promise<number>}
+     */
+    async size() {
+        throw new Error('size must be implemented');
+    }
+
+    /**
+     * @abstract
+     * Check if a key exists in the store
+     * @param {string} key - Key to check
+     * @returns {Promise<boolean>}
+     */
+    async has(key) {
+        throw new Error('has must be implemented');
+    }
+
+    /**
+     * @abstract
+     * Get usage metrics for the store
+     * @returns {Promise<Object>}
+     */
+    async getUsageMetrics() {
+        throw new Error('getUsageMetrics must be implemented');
+    }
+
+    /**
+     * @abstract
+     * Clean up resources
+     * @returns {Promise<void>}
+     */
+    async destroy() {
+        throw new Error('destroy must be implemented');
+    }
+
+    /**
+     * @abstract
+     * Vacuum/optimize the store
+     * @returns {Promise<void>}
+     */
+    async vacuum() {
+        throw new Error('vacuum must be implemented');
+    }
+
+    /**
+     * @abstract
+     * Get the dimension of vectors in this store
+     * @returns {number}
+     */
+    getDimensions() {
+        throw new Error('getDimensions must be implemented');
+    }
+}
+--- End of modules/vector/vectorStoreBase.js ---
+
+
+--- File: modules/vector/vectorStore.js ---
+
+import { AsyncLock } from '../concurrency';
+import { VectorIndex } from './vectorIndex';
+import { VectorSimilarity } from './utils/similarity';
+import { ThoughtError } from '../errors/thoughtError';
+import { VectorStore } from './vectorStoreBase';
+
+class EnhancedVectorStore extends VectorStore {
+    constructor() {
+        super();
+
+        this.store = new Map();
+        this.index = new VectorIndex();
+        this.deletedKeys = new Set();
+        this.modelCache = new Map();
+        this.dimensions = 128; // Embedding dimension
+
+        // After creating the index, assume the index initializes one or more trees.
+        // We'll set this.root to the root of the first tree for searchNode operations.
+        // This depends on VectorIndex and RandomProjectionTree implementation details.
+        // If your VectorIndex creates multiple trees, just pick the first one:
+        if (this.index.trees && this.index.trees.length > 0) {
+            this.root = this.index.trees[0].root;
+        } else {
+            // If no trees exist yet, you may need to handle this differently or lazily.
+            this.root = null;
+        }
+
+        this.apiConfig = {
+            endpoint: null,
+            apiKey: null,
+            modelName: null
+        };
+
+        this.searchLock = new AsyncLock();
+        this.updateLock = new AsyncLock();
+    }
+
+    // Implement abstract methods from VectorStore
+    async add(key, embedding) {
+        this.validateVector(embedding);
+        this.normalizeVector(embedding);
+        await this.index.add(key, embedding);
+        this.store.set(key, embedding);
+    }
+
+    async delete(key) {
+        const deleted = await this.index.delete(key);
+        if (deleted) {
+            this.store.delete(key);
+            this.deletedKeys.add(key);
+            return true;
+        }
+        return false;
+    }
+
+    async clear() {
+        // Remove all vectors
+        for (const key of this.store.keys()) {
+            await this.delete(key);
+        }
+    }
+
+    async size() {
+        // Return the number of vectors currently stored
+        return this.store.size;
+    }
+
+    async has(key) {
+        return this.store.has(key);
+    }
+
+    async vacuum() {
+        // If VectorIndex supports maintenance, call it here
+        if (typeof this.index.maintenance === 'function') {
+            await this.index.maintenance();
+        }
+    }
+
+    async getUsageMetrics() {
+        // Return basic usage metrics. Adjust as needed.
+        return {
+            vectorCount: await this.size(),
+            dimensions: this.dimensions
+        };
+    }
+
+    async generateEmbedding(data) {
+        if (!this.apiConfig.endpoint || !this.apiConfig.apiKey) {
+            throw new Error('API configuration missing');
+        }
+
+        try {
+            const response = await fetch(this.apiConfig.endpoint, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${this.apiConfig.apiKey}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    input: typeof data === 'string' ? data : JSON.stringify(data),
+                    model: this.apiConfig.modelName
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error(`API request failed with status ${response.status}`);
+            }
+
+            const result = await response.json();
+            if (!result.embedding || !Array.isArray(result.embedding)) {
+                throw new Error('Invalid embedding format received');
+            }
+
+            return new Float32Array(result.embedding);
+        } catch (error) {
+            throw new Error(`Embedding generation failed: ${error.message}`, { cause: error });
+        }
+    }
+
+    async tokenize(text) {
+        // Simple tokenization - split by whitespace and punctuation
+        return text.toLowerCase()
+            .replace(/[.,!?;:]/g, ' ')
+            .split(/\s+/)
+            .filter(token => token.length > 0);
+    }
+
+    async hashTokens(tokens) {
+        // Create a stable hash of the tokens
+        const text = tokens.join(' ');
+        const encoder = new TextEncoder();
+        const data = encoder.encode(text);
+        const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+        return new Uint8Array(hashBuffer);
+    }
+
+    applyPositionalEncoding(embedding, sequenceLength) {
+        // Apply sinusoidal positional encoding
+        const positionScale = 10000;
+        for (let i = 0; i < this.dimensions; i += 2) {
+            const position = i / this.dimensions;
+            const scale = Math.exp(-(position * Math.log(positionScale)));
+
+            embedding[i] *= Math.sin(sequenceLength * scale);
+            if (i + 1 < this.dimensions) {
+                embedding[i + 1] *= Math.cos(sequenceLength * scale);
+            }
+        }
+    }
+
+    async applyTokenFeatures(embedding, tokens) {
+        // Apply token-specific features
+        const features = await this.extractTokenFeatures(tokens);
+
+        // Blend features into embedding
+        const blendFactor = 0.3;
+        for (let i = 0; i < this.dimensions && i < features.length; i++) {
+            embedding[i] = embedding[i] * (1 - blendFactor) + features[i] * blendFactor;
+        }
+    }
+
+    async extractTokenFeatures(tokens) {
+        const features = new Float32Array(this.dimensions);
+
+        // Calculate token statistics
+        const tokenFreq = new Map();
+        tokens.forEach(token => {
+            tokenFreq.set(token, (tokenFreq.get(token) || 0) + 1);
+        });
+
+        // Generate features based on token statistics
+        let pos = 0;
+        for (const [token, freq] of tokenFreq.entries()) {
+            const tokenHash = await this.hashToken(token);
+            const frequencyFactor = Math.log1p(freq) / Math.log1p(tokens.length);
+
+            // Mix token features into the embedding
+            for (let i = 0; i < 32 && pos < this.dimensions; i++, pos++) {
+                features[pos] = (tokenHash[i % tokenHash.length] / 255) * frequencyFactor;
+            }
+        }
+
+        return features;
+    }
+
+    async hashToken(token) {
+        // Cache token hashes
+        if (this.modelCache.has(token)) {
+            return this.modelCache.get(token);
+        }
+
+        const encoder = new TextEncoder();
+        const data = encoder.encode(token);
+        const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+        const hash = new Uint8Array(hashBuffer);
+
+        this.modelCache.set(token, hash);
+        return hash;
+    }
+
+    normalizeVector(vector) {
+        // L2 normalization
+        let norm = 0;
+        for (let i = 0; i < vector.length; i++) {
+            norm += vector[i] * vector[i];
+        }
+        norm = Math.sqrt(norm);
+
+        if (norm > 0) {
+            for (let i = 0; i < vector.length; i++) {
+                vector[i] /= norm;
+            }
+        }
+    }
+
+    validateVector(vector) {
+        if (!vector || !Array.isArray(vector)) {
+            throw new Error('Invalid vector: must be an array');
+        }
+        if (vector.length !== this.dimensions) {
+            throw new Error(`Invalid vector dimensions: expected ${this.dimensions}, got ${vector.length}`);
+        }
+        if (!vector.every(v => typeof v === 'number' && !isNaN(v))) {
+            throw new Error('Invalid vector: all elements must be numbers');
+        }
+    }
+
+    // Overriding the search method from VectorStore:
+    async search(queryEmbedding, limit = 5, similarityThreshold = 0.5) {
+        // Validate input vector
+        this.validateVector(queryEmbedding);
+
+        return await this.searchLock.acquire('search', async () => {
+            const results = new Map();
+
+            try {
+                if (!this.root) {
+                    throw new Error('No root node available for searching');
+                }
+                await this.searchNode(this.root, queryEmbedding, limit, results);
+
+                // Sort and filter results atomically
+                return Array.from(results.entries())
+                    .sort(([, scoreA], [, scoreB]) => scoreB - scoreA)
+                    .filter(([, score]) => score >= similarityThreshold)
+                    .slice(0, limit)
+                    .map(([key]) => key);
+            } catch (error) {
+                console.error('Error during vector search:', error);
+                throw new Error('Vector search failed: ' + error.message);
+            }
+        });
+    }
+
+    project(embedding, plane) {
+        let sum = 0;
+        for (let i = 0; i < this.dimensions; i++) {
+            sum += embedding[i] * plane[i];
+        }
+        return sum;
+    }
+
+    async searchNode(node, queryEmbedding, limit, results) {
+        if (node.isLeaf) {
+            // Calculate actual similarity scores for leaf nodes
+            for (const [key, embedding] of node.points) {
+                const similarity = VectorSimilarity.cosineSimilarity(
+                    queryEmbedding,
+                    embedding
+                );
+                results.set(key, similarity);
+            }
+            return;
+        }
+
+        // Project query point and traverse tree
+        const projection = this.project(queryEmbedding, node.splitPlane);
+        const [primaryChild, secondaryChild] = projection <= 0
+            ? [node.left, node.right]
+            : [node.right, node.left];
+
+        await this.searchNode(primaryChild, queryEmbedding, limit, results);
+
+        // Check if we need to explore the other branch
+        const currentBest = Array.from(results.values())
+            .sort((a, b) => b - a)
+            .slice(0, limit);
+        const worstScore = currentBest.length < limit ? -Infinity : currentBest[currentBest.length - 1];
+
+        // Explore other branch if it might contain better matches
+        const splitDistance = Math.abs(projection);
+        if (splitDistance < Math.sqrt(2 - 2 * worstScore)) {
+            await this.searchNode(secondaryChild, queryEmbedding, limit, results);
+        }
+    }
+
+    async destroy() {
+        try {
+            // Clear all stored vectors
+            this.store.clear();
+
+            // Clear index
+            await this.index.destroy();
+
+            // Clear caches
+            this.modelCache.clear();
+            this.deletedKeys.clear();
+
+            // Release any held resources
+            this.root = null;
+        } catch (error) {
+            console.error('Error destroying vector store:', error);
+            throw new Error('Failed to destroy vector store: ' + error.message);
+        }
+    }
+}
+
+export { EnhancedVectorStore };
+--- End of modules/vector/vectorStore.js ---
+
+
+
+=== Folder: modules/vector/utils ===
+
+
+--- File: modules/vector/utils/projectionTree.js ---
+
+import { AsyncLock } from '../concurrency';
+
+class RandomProjectionTree {
+    constructor(dimensions = 128, maxLeafSize = 10) {
+        this.dimensions = dimensions;
+        this.maxLeafSize = maxLeafSize;
+        this.root = this.createNode();
+        this.nodeCount = 1;
+        this.depth = 0;
+        this.maxDepth = 0;
+        this.vectorCount = 0;
+        this.lock = new AsyncLock();
+        this.rebalanceThreshold = 2; // Tree is unbalanced if depth ratio exceeds this
+    }
+
+    createNode() {
+        return {
+            isLeaf: true,
+            points: new Map(), // key -> embedding
+            splitPlane: null,
+            left: null,
+            right: null,
+            size: 0,
+            depth: 0,
+            parent: null
+        };
+    }
+
+    async insert(key, embedding) {
+        return await this.lock.acquire('insert', async () => {
+            try {
+                if (!embedding || embedding.length !== this.dimensions) {
+                    throw new Error(`Invalid embedding dimensions: expected ${this.dimensions}`);
+                }
+
+                await this.insertAtNode(this.root, key, embedding);
+                this.vectorCount++;
+                return true;
+            } catch (error) {
+                console.error('Error inserting into tree:', error);
+                throw new Error('Failed to insert into tree: ' + error.message);
+            }
+        });
+    }
+
+    async insertAtNode(node, key, embedding) {
+        if (node.isLeaf) {
+            node.points.set(key, new Float32Array(embedding));
+            node.size++;
+
+            // Split if too many points and not too deep
+            if (node.points.size > this.maxLeafSize && node.depth < 20) {
+                await this.splitNode(node);
+            }
+            return;
+        }
+
+        // Non-leaf node: traverse to appropriate child
+        const projection = this.project(embedding, node.splitPlane);
+        const nextNode = projection <= 0 ? node.left : node.right;
+        nextNode.parent = node;
+        nextNode.depth = node.depth + 1;
+        this.maxDepth = Math.max(this.maxDepth, nextNode.depth);
+        
+        await this.insertAtNode(nextNode, key, embedding);
+        node.size++;
+    }
+
+    async splitNode(node) {
+        try {
+            // Generate random splitting plane
+            node.splitPlane = await this.generateRandomPlane();
+            node.left = this.createNode();
+            node.right = this.createNode();
+            node.isLeaf = false;
+            this.nodeCount += 2;
+
+            // Set child properties
+            node.left.depth = node.right.depth = node.depth + 1;
+            node.left.parent = node.right.parent = node;
+
+            // Redistribute points
+            for (const [key, embedding] of node.points) {
+                const projection = this.project(embedding, node.splitPlane);
+                const targetNode = projection <= 0 ? node.left : node.right;
+                targetNode.points.set(key, embedding);
+                targetNode.size++;
+            }
+
+            // Update max depth
+            this.maxDepth = Math.max(this.maxDepth, node.depth + 1);
+
+            // Clear points from this node
+            node.points.clear();
+        } catch (error) {
+            console.error('Error splitting node:', error);
+            throw new Error('Failed to split node: ' + error.message);
+        }
+    }
+
+    async generateRandomPlane() {
+        // Generate random unit vector for splitting plane
+        const plane = new Float32Array(this.dimensions);
+        let sumSquares = 0;
+
+        // Use crypto random for better randomness if available
+        if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
+            const randomBytes = new Uint8Array(this.dimensions);
+            crypto.getRandomValues(randomBytes);
+            for (let i = 0; i < this.dimensions; i++) {
+                plane[i] = (randomBytes[i] / 255) * 2 - 1;
+                sumSquares += plane[i] * plane[i];
+            }
+        } else {
+            for (let i = 0; i < this.dimensions; i++) {
+                plane[i] = Math.random() * 2 - 1;
+                sumSquares += plane[i] * plane[i];
+            }
+        }
+
+        // Normalize the plane vector
+        const norm = Math.sqrt(sumSquares);
+        for (let i = 0; i < this.dimensions; i++) {
+            plane[i] /= norm;
+        }
+
+        return plane;
+    }
+
+    project(embedding, plane) {
+        let sum = 0;
+        for (let i = 0; i < this.dimensions; i++) {
+            sum += embedding[i] * plane[i];
+        }
+        return sum;
+    }
+
+    async search(queryEmbedding, limit = 5) {
+        return await this.lock.acquire('search', async () => {
+            try {
+                if (!queryEmbedding || queryEmbedding.length !== this.dimensions) {
+                    throw new Error('Invalid query embedding dimensions');
+                }
+
+                const results = new Map();
+                await this.searchNode(this.root, queryEmbedding, limit, results);
+
+                return Array.from(results.keys())
+                    .sort((a, b) => results.get(b) - results.get(a))
+                    .slice(0, limit);
+            } catch (error) {
+                console.error('Error during search:', error);
+                throw new Error('Search failed: ' + error.message);
+            }
+        });
+    }
+
+    async searchNode(node, queryEmbedding, limit, results) {
+        if (node.isLeaf) {
+            for (const [key, embedding] of node.points) {
+                const similarity = await this.calculateSimilarity(queryEmbedding, embedding);
+                results.set(key, similarity);
+            }
+            return;
+        }
+
+        const projection = this.project(queryEmbedding, node.splitPlane);
+        const [primaryChild, secondaryChild] = projection <= 0
+            ? [node.left, node.right]
+            : [node.right, node.left];
+
+        await this.searchNode(primaryChild, queryEmbedding, limit, results);
+
+        // Check if we need to explore the other branch
+        if (this.shouldExploreSecondaryBranch(projection, results, limit)) {
+            await this.searchNode(secondaryChild, queryEmbedding, limit, results);
+        }
+    }
+
+    shouldExploreSecondaryBranch(projection, results, limit) {
+        // If we don't have enough results yet, explore the other branch
+        if (results.size < limit) return true;
+
+        // Get the worst score among our current top results
+        const scores = Array.from(results.values()).sort((a, b) => b - a);
+        const worstScore = scores[limit - 1];
+
+        // Calculate the maximum possible similarity in the other branch
+        const splitDistance = Math.abs(projection);
+        const maxPossibleSimilarity = Math.sqrt(1 - splitDistance * splitDistance);
+
+        // Explore if the other branch might contain better results
+        return maxPossibleSimilarity > worstScore;
+    }
+
+    async calculateSimilarity(a, b) {
+        let dotProduct = 0;
+        for (let i = 0; i < this.dimensions; i++) {
+            dotProduct += a[i] * b[i];
+        }
+        return Math.max(-1, Math.min(1, dotProduct));
+    }
+
+    async delete(key) {
+        return await this.lock.acquire('delete', async () => {
+            try {
+                const deleted = await this.deleteFromNode(this.root, key);
+                if (deleted) {
+                    this.vectorCount--;
+                }
+                return deleted;
+            } catch (error) {
+                console.error('Error deleting from tree:', error);
+                throw new Error('Failed to delete from tree: ' + error.message);
+            }
+        });
+    }
+
+    async deleteFromNode(node, key) {
+        if (node.isLeaf) {
+            const deleted = node.points.delete(key);
+            if (deleted) {
+                node.size--;
+                this.updateSizeUpwards(node.parent);
+            }
+            return deleted;
+        }
+
+        // Try both children if not leaf
+        const deletedLeft = await this.deleteFromNode(node.left, key);
+        if (deletedLeft) {
+            node.size--;
+            return true;
+        }
+
+        const deletedRight = await this.deleteFromNode(node.right, key);
+        if (deletedRight) {
+            node.size--;
+            return true;
+        }
+
+        return false;
+    }
+
+    updateSizeUpwards(node) {
+        while (node) {
+            node.size = (node.left ? node.left.size : 0) + 
+                       (node.right ? node.right.size : 0);
+            node = node.parent;
+        }
+    }
+
+    needsRebalancing() {
+        if (this.vectorCount < 100) return false; // Don't rebalance small trees
+        
+        const minDepth = this.getMinDepth(this.root);
+        const depthRatio = this.maxDepth / minDepth;
+        
+        return depthRatio > this.rebalanceThreshold;
+    }
+
+    getMinDepth(node) {
+        if (node.isLeaf) return node.depth;
+        return Math.min(
+            this.getMinDepth(node.left),
+            this.getMinDepth(node.right)
+        );
+    }
+
+    async destroy() {
+        return await this.lock.acquire('destroy', async () => {
+            try {
+                this.destroyNode(this.root);
+                this.root = null;
+                this.nodeCount = 0;
+                this.vectorCount = 0;
+                this.depth = 0;
+                this.maxDepth = 0;
+                return true;
+            } catch (error) {
+                console.error('Error destroying tree:', error);
+                throw new Error('Failed to destroy tree: ' + error.message);
+            }
+        });
+    }
+
+    destroyNode(node) {
+        if (!node) return;
+        
+        if (node.isLeaf) {
+            node.points.clear();
+        } else {
+            this.destroyNode(node.left);
+            this.destroyNode(node.right);
+        }
+        
+        node.splitPlane = null;
+        node.left = null;
+        node.right = null;
+        node.parent = null;
+    }
+
+    async getStats() {
+        return {
+            nodeCount: this.nodeCount,
+            vectorCount: this.vectorCount,
+            depth: this.maxDepth,
+            minDepth: this.getMinDepth(this.root),
+            averageLeafSize: this.calculateAverageLeafSize(),
+            isBalanced: !this.needsRebalancing()
+        };
+    }
+
+    calculateAverageLeafSize() {
+        let leafSizes = [];
+        this.collectLeafSizes(this.root, leafSizes);
+        
+        if (leafSizes.length === 0) return 0;
+        
+        const sum = leafSizes.reduce((a, b) => a + b, 0);
+        return sum / leafSizes.length;
+    }
+
+    collectLeafSizes(node, sizes) {
+        if (!node) return;
+        
+        if (node.isLeaf) {
+            sizes.push(node.points.size);
+        } else {
+            this.collectLeafSizes(node.left, sizes);
+            this.collectLeafSizes(node.right, sizes);
+        }
+    }
+}
+--- End of modules/vector/utils/projectionTree.js ---
+
+
+--- File: modules/vector/utils/similarity.js ---
+
+class VectorSimilarity {
+    static validateVectors(a, b) {
+        if (!Array.isArray(a) || !Array.isArray(b)) {
+            throw new Error('Vectors must be arrays');
+        }
+        if (a.length !== b.length) {
+            throw new Error(`Vector lengths don't match: ${a.length} vs ${b.length}`);
+        }
+        if (!a.every(v => typeof v === 'number' && !isNaN(v)) ||
+            !b.every(v => typeof v === 'number' && !isNaN(v))) {
+            throw new Error('Vectors must contain only numbers');
+        }
+    }
+
+    static cosineSimilarity(a, b) {
+        this.validateVectors(a, b);
+
+        let dotProduct = 0;
+        let normA = 0;
+        let normB = 0;
+
+        for (let i = 0; i < a.length; i++) {
+            dotProduct += a[i] * b[i];
+            normA += a[i] * a[i];
+            normB += b[i] * b[i];
+        }
+
+        // Handle zero vectors
+        if (normA === 0 || normB === 0) {
+            return 0;
+        }
+
+        // Use Math.fround for numerical stability
+        return Math.fround(dotProduct / (Math.sqrt(normA) * Math.sqrt(normB)));
+    }
+
+    static euclideanDistance(a, b) {
+        let sum = 0;
+        for (let i = 0; i < a.length; i++) {
+            const diff = a[i] - b[i];
+            sum += diff * diff;
+        }
+        return Math.sqrt(sum);
+    }
+
+    static manhattanDistance(a, b) {
+        let sum = 0;
+        for (let i = 0; i < a.length; i++) {
+            sum += Math.abs(a[i] - b[i]);
+        }
+        return sum;
+    }
+}
+--- End of modules/vector/utils/similarity.js ---
+
+
+
+=== File: package.json ===
+
+{
+  "name": "thought-system",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Enhanced thought processing system",
+  "main": "index.js",
+  "scripts": {
+    "test": "NODE_OPTIONS=--experimental-vm-modules jest --config jest.config.cjs",
+    "test:watch": "NODE_OPTIONS=--experimental-vm-modules jest --config jest.config.cjs --watch",
+    "test:coverage": "NODE_OPTIONS=--experimental-vm-modules jest --config jest.config.cjs --coverage"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@babel/core": "^7.24.0",
+    "@babel/plugin-transform-modules-commonjs": "^7.24.0",
+    "@babel/preset-env": "^7.24.0",
+    "babel-jest": "^29.7.0",
+    "jest": "^29.7.0",
+    "jest-environment-node": "^29.7.0"
+  },
+  "dependencies": {
+    "jest-mock": "^29.7.0"
+  }
+}
+--- End of package.json ---
+

@@ -4,9 +4,22 @@
   "description": "Enhanced thought processing system",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "NODE_OPTIONS=--experimental-vm-modules jest --config jest.config.js",
+    "test:watch": "NODE_OPTIONS=--experimental-vm-modules jest --config jest.config.js --watch",
+    "test:coverage": "NODE_OPTIONS=--experimental-vm-modules jest --config jest.config.js --coverage"
   },
   "keywords": [],
   "author": "",
-  "license": "ISC"
+  "license": "ISC",
+  "devDependencies": {
+    "@babel/core": "^7.24.0",
+    "@babel/plugin-transform-modules-commonjs": "^7.24.0",
+    "@babel/preset-env": "^7.24.0",
+    "babel-jest": "^29.7.0",
+    "jest": "^29.7.0",
+    "jest-environment-node": "^29.7.0"
+  },
+  "dependencies": {
+    "jest-mock": "^29.7.0"
+  }
 }

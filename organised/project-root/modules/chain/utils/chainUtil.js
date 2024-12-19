@@ -89,3 +89,5 @@ class ChainUtil {
         };
     }
 }
+
+export { ChainUtil };

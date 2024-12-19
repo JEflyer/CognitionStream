@@ -1,4 +1,4 @@
-import { AsyncLock } from '../concurrency';
+import { AsyncLock } from '../../concurrency';
 
 class LRUCache {
     constructor(capacity) {

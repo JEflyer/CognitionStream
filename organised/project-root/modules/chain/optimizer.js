@@ -1,6 +1,6 @@
-import { AsyncLock } from '../concurrency';
-import { LRUCache } from '../memory/cache/lru';
-import { ThoughtError } from '../errors/thoughtError';
+const { AsyncLock } = require('../concurrency');
+const { LRUCache } = require('../memory/cache/lru');
+const { ThoughtError } = require('../errors/thoughtError');
 
 class EnhancedPatternOptimizer {
     constructor(performanceTracker) {
@@ -368,3 +368,5 @@ class EnhancedPatternOptimizer {
         return this.performanceTracker.getThoughtMetrics(thoughtId);
     }
 }
+
+module.exports = { EnhancedPatternOptimizer };

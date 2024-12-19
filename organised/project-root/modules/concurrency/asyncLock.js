@@ -3,7 +3,7 @@ class AsyncLock {
         this.locks = new Map();
         this.waiting = new Map();
         this.debug = false;
-        this.timeout = 10000; // Default timeout of 10 seconds
+        this.timeout = 10000;
         this.metrics = {
             acquireCount: 0,
             timeouts: 0,
@@ -14,6 +14,7 @@ class AsyncLock {
 
     async acquire(key, fn, timeout = this.timeout) {
         const startTime = Date.now();
+        let lockResolve;
         let lockPromise;
         
         try {
@@ -22,22 +23,21 @@ class AsyncLock {
                 this.locks.set(key, Promise.resolve());
             }
 
-            // Get the current lock
             const currentLock = this.locks.get(key);
 
-            // Create a new promise for this lock request
-            let resolver;
+            // Create a deferred promise for this lock request
             lockPromise = new Promise(resolve => {
-                resolver = resolve;
+                lockResolve = resolve;
             });
 
             // Add to waiting queue
             if (!this.waiting.has(key)) {
                 this.waiting.set(key, []);
             }
-            this.waiting.get(key).push(resolver);
+            const waitingList = this.waiting.get(key);
+            waitingList.push(lockResolve);
 
-            // Wait for previous lock to complete
+            // Wait for previous lock to complete with timeout
             await Promise.race([
                 currentLock,
                 this.createTimeout(timeout)
@@ -45,7 +45,7 @@ class AsyncLock {
 
             // Update metrics
             this.metrics.acquireCount++;
-            if (this.waiting.get(key).length > 1) {
+            if (waitingList.length > 1) {
                 this.metrics.contentionCount++;
             }
 
@@ -54,6 +54,7 @@ class AsyncLock {
 
             // Execute the function
             const result = await fn();
+
             return result;
         } catch (error) {
             if (error.name === 'LockTimeoutError') {
@@ -68,10 +69,13 @@ class AsyncLock {
             // Remove from waiting queue
             const waitingList = this.waiting.get(key);
             if (waitingList && waitingList.length > 0) {
-                const index = waitingList.findIndex(r => r === resolver);
+                const index = waitingList.findIndex(r => r === lockResolve);
                 if (index !== -1) {
                     waitingList.splice(index, 1);
                 }
+                
+                // Resolve current lock
+                if (lockResolve) lockResolve();
                 
                 // Release the next waiting lock if any
                 if (waitingList.length > 0) {
@@ -89,6 +93,36 @@ class AsyncLock {
                 console.log(`Lock ${key} released after ${waitTime}ms`);
             }
         }
+    }
+
+    async tryAcquire(key, fn, timeout = 0) {
+        if (this.isLocked(key)) {
+            return null;
+        }
+        
+        return await this.acquire(key, fn, timeout);
+    }
+
+    async acquireMultiple(keys, fn, timeout = this.timeout) {
+        // Sort keys to prevent deadlocks
+        const sortedKeys = [...new Set(keys)].sort();
+        
+        // Acquire all locks in order
+        const acquire = async (index) => {
+            if (index >= sortedKeys.length) {
+                return await fn();
+            }
+            
+            return await this.acquire(sortedKeys[index], async () => {
+                return await acquire(index + 1);
+            }, timeout);
+        };
+        
+        return await acquire(0);
+    }
+
+    async withLock(key, fn, timeout = this.timeout) {
+        return await this.acquire(key, fn, timeout);
     }
 
     createTimeout(timeout) {
@@ -158,34 +192,11 @@ class AsyncLock {
         }
         this.timeout = timeout;
     }
+}
 
-    async acquireMultiple(keys, fn, timeout = this.timeout) {
-        // Sort keys to prevent deadlocks
-        const sortedKeys = [...new Set(keys)].sort();
-        
-        // Acquire all locks in order
-        const acquire = async (index) => {
-            if (index >= sortedKeys.length) {
-                return await fn();
-            }
-            
-            return await this.acquire(sortedKeys[index], async () => {
-                return await acquire(index + 1);
-            }, timeout);
-        };
-        
-        return await acquire(0);
-    }
+export { AsyncLock };
 
-    async withLock(key, fn, timeout = this.timeout) {
-        return await this.acquire(key, fn, timeout);
-    }
-
-    async tryAcquire(key, fn, timeout = 0) {
-        if (this.isLocked(key)) {
-            return null;
-        }
-        
-        return await this.acquire(key, fn, timeout);
-    }
+// For CommonJS compatibility
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = { AsyncLock };
 }
