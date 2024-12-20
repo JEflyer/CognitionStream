@@ -1,4 +1,4 @@
-import { AsyncLock } from '../../../concurrency';
+import { AsyncLock } from '../../concurrency';
 import os from 'os';  // Node.js built-in
 
 class MetricsCollector {
@@ -340,4 +340,45 @@ class MetricsCollector {
         this.collectors.clear();
         this.baselines = null;
     }
+
+    async getMemoryProfile(thought) {
+        return {
+            heapUsed: process.memoryUsage().heapUsed,
+            heapTotal: process.memoryUsage().heapTotal,
+            external: process.memoryUsage().external,
+            timestamp: Date.now()
+        };
+    }
+
+    async getResourceUsage(thought) {
+        return {
+            cpu: await this.getCPUUsage(),
+            memory: await this.getMemoryProfile(thought),
+            network: await this.getNetworkStats()
+        };
+    }
+
+    getLatestMetrics() {
+        return {
+            ...this.metrics,
+            timestamp: Date.now()
+        };
+    }
+
+    async getCPUUsage() {
+        return {
+            percentage: process.cpuUsage().user / 1000000,
+            timestamp: Date.now()
+        };
+    }
+
+    async getNetworkStats() {
+        return {
+            bytesReceived: 0,
+            bytesSent: 0,
+            timestamp: Date.now()
+        };
+    }
 }
+
+export { MetricsCollector}

@@ -26,15 +26,29 @@ class EnhancedDebugSystem {
         this.monitoringIntervalId = setInterval(() => this.checkSystemHealth(), 5000);
     }
 
-    destroy() {
-        if (this.monitoringIntervalId) {
-            clearInterval(this.monitoringIntervalId);
-            this.monitoringIntervalId = null;
+    async destroy() {
+        try {
+            if (this.monitoringIntervalId) {
+                clearInterval(this.monitoringIntervalId);
+                this.monitoringIntervalId = null;
+            }
+    
+            try {
+                await this.clearLogs();
+            } catch (error) {
+                console.error('Error clearing logs:', error);
+                // Continue with cleanup despite log clearing error
+            }
+    
+            this.breakpoints.clear();
+            this.errorCount.clear();
+            this.debugHooks.clear();
+            
+            return true;
+        } catch (error) {
+            console.error('Error during debug system destruction:', error);
+            throw error;
         }
-        this.clearLogs();
-        this.breakpoints.clear();
-        this.errorCount.clear();
-        this.debugHooks.clear();
     }
 
     async checkSystemHealth() {
@@ -132,10 +146,10 @@ class EnhancedDebugSystem {
     async traceFunctionCalls(thought) {
         const calls = [];
         const originalFunctions = new Map();
-
+    
         // Store original functions and create proxies
         for (const key in thought) {
-            if (typeof thought[key] === 'function') {
+            if (typeof thought[key] === 'function' && key !== 'then') { // Exclude Promise methods
                 originalFunctions.set(key, thought[key]);
                 thought[key] = new Proxy(thought[key], {
                     apply: async (target, thisArg, args) => {
@@ -145,26 +159,34 @@ class EnhancedDebugSystem {
                             arguments: args.map(arg => this.sanitizeArg(arg)),
                             timestamp: Date.now()
                         };
-
+    
                         try {
                             const result = await target.apply(thisArg, args);
                             callInfo.duration = performance.now() - start;
                             callInfo.status = 'success';
                             callInfo.result = this.sanitizeArg(result);
+                            calls.push(callInfo); // Move this inside try block
                             return result;
                         } catch (error) {
                             callInfo.duration = performance.now() - start;
                             callInfo.status = 'error';
                             callInfo.error = error.message;
+                            calls.push(callInfo); // Also track failed calls
                             throw error;
-                        } finally {
-                            calls.push(callInfo);
                         }
                     }
                 });
             }
         }
-
+    
+        // Ensure function was actually called
+        await thought.execute();
+    
+        // Restore original functions
+        for (const [key, originalFn] of originalFunctions) {
+            thought[key] = originalFn;
+        }
+    
         return calls;
     }
 
@@ -388,3 +410,5 @@ class EnhancedDebugSystem {
         };
     }
 }
+
+export {EnhancedDebugSystem}

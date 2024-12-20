@@ -193,3 +193,5 @@ class StorageMetrics {
         };
     }
 }
+
+export {StorageMetrics}

@@ -15,84 +15,90 @@ class AsyncLock {
     async acquire(key, fn, timeout = this.timeout) {
         const startTime = Date.now();
 
-        // If there's no lock for this key, create a resolved promise (means no waiting)
-        if (!this.locks.has(key)) {
-            this.locks.set(key, Promise.resolve());
+        // Initialize waiting list if needed
+        if (!this.waiting.has(key)) {
+            this.waiting.set(key, []);
         }
 
-        const previousLock = this.locks.get(key);
-        let waitingEntry = null;
-        const mustWait = (previousLock !== Promise.resolve());
-
-        // If we must wait, add a function placeholder to waiting list
-        if (mustWait) {
-            if (!this.waiting.has(key)) {
-                this.waiting.set(key, []);
-            }
-            waitingEntry = () => {}; // no-op function for waiting entry
-            this.waiting.get(key).push(waitingEntry);
-        }
-
-        // Wait for previous lock or timeout
-        await Promise.race([
-            previousLock,
-            this.createTimeout(timeout)
-        ]).catch(err => {
-            // If a timeout occurred
-            if (err.name === 'LockTimeoutError') {
-                this.metrics.timeouts++;
-            }
-
-            // Cleanup waiting entry on failure
-            if (waitingEntry) {
-                const wList = this.waiting.get(key);
-                const idx = wList.indexOf(waitingEntry);
-                if (idx !== -1) wList.splice(idx, 1);
-                if (wList.length === 0) this.waiting.delete(key);
-            }
-            throw err;
+        // Create waiting promise for this acquisition attempt
+        let waitResolve;
+        const waitPromise = new Promise(resolve => {
+            waitResolve = resolve;
         });
 
-        // Now we have the lock
-        let lockResolve;
-        const lockPromise = new Promise(resolve => {
-            lockResolve = resolve;
-        });
-        this.locks.set(key, lockPromise);
-
-        // Update metrics
-        this.metrics.acquireCount++;
-        const waitingCount = this.waiting.get(key)?.length || 0;
-        if (waitingCount > 0) {
-            this.metrics.contentionCount++;
-        }
-
-        // Remove waiting entry now since we acquired the lock
-        if (waitingEntry) {
-            const wList = this.waiting.get(key);
-            const idx = wList.indexOf(waitingEntry);
-            if (idx !== -1) wList.splice(idx, 1);
-            if (wList.length === 0) this.waiting.delete(key);
-        }
+        // Add to waiting list
+        const waiters = this.waiting.get(key);
+        waiters.push(waitResolve);
 
         try {
-            const result = await fn();
-            return result;
-        } finally {
-            const waitTime = Date.now() - startTime;
-            this.metrics.totalWaitTime += waitTime;
-
-            // Release the lock so the next waiter (if any) can proceed
-            lockResolve();
-
-            // If no more locks waiting, remove from map
-            if (this.locks.get(key) === lockPromise) {
-                this.locks.delete(key);
+            // If there's an existing lock, wait for it or timeout
+            if (this.locks.has(key)) {
+                const timeoutPromise = this.createTimeout(timeout);
+                try {
+                    await Promise.race([this.locks.get(key), timeoutPromise]);
+                } catch (error) {
+                    // Remove from waiting list before throwing timeout error
+                    const index = waiters.indexOf(waitResolve);
+                    if (index !== -1) {
+                        waiters.splice(index, 1);
+                    }
+                    if (waiters.length === 0) {
+                        this.waiting.delete(key);
+                    }
+                    this.metrics.timeouts++;
+                    throw error;
+                }
             }
 
-            if (this.debug) {
-                console.log(`Lock ${key} released after ${waitTime}ms`);
+            // Create new lock promise
+            let lockResolve;
+            const lockPromise = new Promise(resolve => {
+                lockResolve = resolve;
+            });
+            this.locks.set(key, lockPromise);
+
+            // Update metrics
+            this.metrics.acquireCount++;
+            if (waiters.length > 1) {
+                this.metrics.contentionCount++;
             }
+
+            try {
+                // Execute function
+                const result = await fn();
+                return result;
+            } catch (error) {
+                // For function execution errors, ensure cleanup before rethrowing
+                const index = waiters.indexOf(waitResolve);
+                if (index !== -1) {
+                    waiters.splice(index, 1);
+                }
+                if (waiters.length === 0) {
+                    this.waiting.delete(key);
+                }
+                throw error;
+            } finally {
+                const waitTime = Date.now() - startTime;
+                this.metrics.totalWaitTime += waitTime;
+
+                // Clean up waiting list
+                const index = waiters.indexOf(waitResolve);
+                if (index !== -1) {
+                    waiters.splice(index, 1);
+                }
+                if (waiters.length === 0) {
+                    this.waiting.delete(key);
+                }
+
+                // Release lock
+                lockResolve();
+                if (this.locks.get(key) === lockPromise) {
+                    this.locks.delete(key);
+                }
+            }
+        } catch (error) {
+            // Handle any unexpected errors
+            throw error;
         }
     }
 
@@ -100,8 +106,14 @@ class AsyncLock {
         if (this.isLocked(key)) {
             return null;
         }
-        
-        return await this.acquire(key, fn, timeout);
+        try {
+            return await this.acquire(key, fn, timeout);
+        } catch (error) {
+            if (error.name === 'LockTimeoutError') {
+                return null;
+            }
+            throw error;
+        }
     }
 
     async acquireMultiple(keys, fn, timeout = this.timeout) {
@@ -136,12 +148,15 @@ class AsyncLock {
         });
     }
 
-    isLocked(key) {
-        return this.locks.has(key) || (this.waiting.get(key)?.length > 0);
-    }
-
     getWaitingCount(key) {
-        return this.waiting.get(key)?.length || 0;
+        const waiters = this.waiting.get(key);
+        if (!waiters) return 0;
+        // If there's an active lock, don't count the first waiter as it's currently executing
+        return this.locks.has(key) ? waiters.length - 1 : waiters.length;
+    }
+    
+    isLocked(key) {
+        return this.locks.has(key) || (this.waiting.get(key)?.length > 0) || false;
     }
 
     async isBusy() {
@@ -154,24 +169,39 @@ class AsyncLock {
             ...this.metrics,
             averageWaitTime: this.metrics.totalWaitTime / totalOperations,
             contentionRate: this.metrics.contentionCount / totalOperations,
-            timeoutRate: this.metrics.timeouts / totalOperations,
-            activeKeys: this.locks.size,
-            waitingOperations: Array.from(this.waiting.values())
-                .reduce((sum, list) => sum + list.length, 0)
+            timeoutRate: this.metrics.timeouts / totalOperations
         };
     }
 
+
     async releaseAll() {
-        // Release all waiting operations by calling them (they are no-op functions)
-        for (const waitingList of this.waiting.values()) {
-            for (const resolver of waitingList) {
-                // resolver is a function (no-op), call it
-                resolver();
+        // Copy all keys to avoid modification during iteration
+        const lockKeys = Array.from(this.locks.keys());
+        const waitingKeys = Array.from(this.waiting.keys());
+    
+        // Release all active locks
+        for (const key of lockKeys) {
+            const lockPromise = this.locks.get(key);
+            if (lockPromise) {
+                // Resolve the lock promise
+                await lockPromise;
+                this.locks.delete(key);
             }
         }
-        
-        this.locks.clear();
-        this.waiting.clear();
+    
+        // Release all waiting operations
+        for (const key of waitingKeys) {
+            const waiters = this.waiting.get(key);
+            if (waiters) {
+                // Copy waiters array to avoid modification during iteration
+                const waitersCopy = [...waiters];
+                // Resolve all waiters
+                for (const resolve of waitersCopy) {
+                    resolve();
+                }
+                this.waiting.delete(key);
+            }
+        }
     }
 
     reset() {
@@ -194,9 +224,11 @@ class AsyncLock {
         }
         this.timeout = timeout;
     }
+
+    async isBusy() {
+        return this.locks.size > 0 || Array.from(this.waiting.values())
+            .some(list => list.length > 0);
+    }
 }
 
-// For CommonJS compatibility
-if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { AsyncLock };
-}
+export {AsyncLock}

@@ -1,28 +1,32 @@
 // tests/test-setup.js
 
-import {jest} from '@jest/globals';
+import { jest } from '@jest/globals';
+import { indexedDB, MockIDBDatabase, MockIDBIndex, MockIDBObjectStore, MockIDBRequest, MockIDBTransaction } from "./MockIndexedDB"
+import { IDBKeyRange } from './MockIndexedDB.js';
+
+global.IDBKeyRange = IDBKeyRange;
 
 // Mock implementation of crypto for tests
 const mockCrypto = {
-  subtle: {
-    digest: jest.fn().mockImplementation((algorithm, data) => {
-        // Just ignore 'algorithm' since we know it's SHA-256
-        // 'data' is an ArrayBuffer. Pass it directly to our sha256 function:
-        const hashBuffer = sha256(data);
-  
-        // Return a promise that resolves with the computed hash ArrayBuffer
-        return Promise.resolve(hashBuffer);
-      }),
-      generateKey: jest.fn(),
-      sign: jest.fn(),
-      verify: jest.fn()
-  },
-  getRandomValues: jest.fn().mockImplementation(arr => {
-    for (let i = 0; i < arr.length; i++) {
-      arr[i] = Math.floor(Math.random() * 256);
-    }
-    return arr;
-  })
+    subtle: {
+        digest: jest.fn().mockImplementation((algorithm, data) => {
+            // Just ignore 'algorithm' since we know it's SHA-256
+            // 'data' is an ArrayBuffer. Pass it directly to our sha256 function:
+            const hashBuffer = sha256(data);
+
+            // Return a promise that resolves with the computed hash ArrayBuffer
+            return Promise.resolve(hashBuffer);
+        }),
+        generateKey: jest.fn(),
+        sign: jest.fn(),
+        verify: jest.fn()
+    },
+    getRandomValues: jest.fn().mockImplementation(arr => {
+        for (let i = 0; i < arr.length; i++) {
+            arr[i] = Math.floor(Math.random() * 256);
+        }
+        return arr;
+    })
 };
 
 function sha256(buffer) {
@@ -195,7 +199,7 @@ class MockLRUCache {
             this.cache.set(key, node);
             this.head.next.prev = node;
             this.head.next = node;
-            
+
             if (this.cache.size > this.capacity) {
                 const lru = this.tail.prev;
                 this.removeNode(lru);
@@ -238,18 +242,21 @@ class MockLRUCache {
     }
 }
 
+
 // Setup test environment
 const setupTestEnvironment = () => {
     // Mock window and global objects
     global.crypto = mockCrypto;
-    
+
     // Mock fetch
-    global.fetch = jest.fn().mockImplementation(() => 
+    global.fetch = jest.fn().mockImplementation(() =>
         Promise.resolve({
             ok: true,
             json: () => Promise.resolve({})
         })
     );
+
+    global.indexedDB = indexedDB;
 
     // Mock text encoder/decoder
     global.TextEncoder = jest.fn().mockImplementation(() => ({
@@ -281,11 +288,11 @@ const cleanupTestEnvironment = () => {
 };
 
 export {
-  createMockPerformanceTracker,
-  createMockNode,
-  flushPromises,
-  delay,
-  setupTestEnvironment,
-  cleanupTestEnvironment,
-  MockLRUCache
+    createMockPerformanceTracker,
+    createMockNode,
+    flushPromises,
+    delay,
+    setupTestEnvironment,
+    cleanupTestEnvironment,
+    MockLRUCache
 };

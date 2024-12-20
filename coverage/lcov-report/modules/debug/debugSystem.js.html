@@ -3,7 +3,7 @@
 <html lang="en">
 
 <head>
-    <title>Code coverage report for modules/chain/optimizer.js</title>
+    <title>Code coverage report for modules/debug/debugSystem.js</title>
     <meta charset="utf-8" />
     <link rel="stylesheet" href="../../prettify.css" />
     <link rel="stylesheet" href="../../base.css" />
@@ -19,34 +19,34 @@
 <body>
 <div class='wrapper'>
     <div class='pad1'>
-        <h1><a href="../../index.html">All files</a> / <a href="index.html">modules/chain</a> optimizer.js</h1>
+        <h1><a href="../../index.html">All files</a> / <a href="index.html">modules/debug</a> debugSystem.js</h1>
         <div class='clearfix'>
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">66.08% </span>
+                <span class="strong">80.12% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>113/171</span>
+                <span class='fraction'>125/156</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">35.29% </span>
+                <span class="strong">59.61% </span>
                 <span class="quiet">Branches</span>
-                <span class='fraction'>24/68</span>
+                <span class='fraction'>31/52</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">71.11% </span>
+                <span class="strong">88.23% </span>
                 <span class="quiet">Functions</span>
-                <span class='fraction'>32/45</span>
+                <span class='fraction'>30/34</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">66.04% </span>
+                <span class="strong">84.45% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>107/162</span>
+                <span class='fraction'>125/148</span>
             </div>
         
             
@@ -61,7 +61,7 @@
             </div>
         </template>
     </div>
-    <div class='status-line medium'></div>
+    <div class='status-line high'></div>
     <pre><table class="coverage">
 <tr><td class="line-count quiet"><a name='L1'></a><a href='#L1'>1</a>
 <a name='L2'></a><a href='#L2'>2</a>
@@ -465,90 +465,291 @@
 <a name='L400'></a><a href='#L400'>400</a>
 <a name='L401'></a><a href='#L401'>401</a>
 <a name='L402'></a><a href='#L402'>402</a>
-<a name='L403'></a><a href='#L403'>403</a></td><td class="line-coverage quiet"><span class="cline-any cline-yes">1x</span>
-<span class="cline-any cline-yes">1x</span>
-<span class="cline-any cline-yes">1x</span>
-<span class="cline-any cline-yes">1x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">7x</span>
-<span class="cline-any cline-yes">7x</span>
-<span class="cline-any cline-yes">7x</span>
-<span class="cline-any cline-yes">7x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">7x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
+<a name='L403'></a><a href='#L403'>403</a>
+<a name='L404'></a><a href='#L404'>404</a>
+<a name='L405'></a><a href='#L405'>405</a>
+<a name='L406'></a><a href='#L406'>406</a>
+<a name='L407'></a><a href='#L407'>407</a>
+<a name='L408'></a><a href='#L408'>408</a>
+<a name='L409'></a><a href='#L409'>409</a>
+<a name='L410'></a><a href='#L410'>410</a>
+<a name='L411'></a><a href='#L411'>411</a>
+<a name='L412'></a><a href='#L412'>412</a>
+<a name='L413'></a><a href='#L413'>413</a>
+<a name='L414'></a><a href='#L414'>414</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">7x</span>
-<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">15x</span>
+<span class="cline-any cline-yes">15x</span>
+<span class="cline-any cline-yes">15x</span>
+<span class="cline-any cline-yes">15x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">7x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">7x</span>
-<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">15x</span>
+<span class="cline-any cline-yes">15x</span>
+<span class="cline-any cline-yes">15x</span>
+<span class="cline-any cline-yes">15x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">15x</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">15x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">18x</span>
+<span class="cline-any cline-yes">18x</span>
+<span class="cline-any cline-yes">15x</span>
+<span class="cline-any cline-yes">15x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">18x</span>
+<span class="cline-any cline-yes">18x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">18x</span>
+<span class="cline-any cline-yes">18x</span>
+<span class="cline-any cline-yes">18x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">18x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
 <span class="cline-any cline-yes">7x</span>
-<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">7x</span>
-<span class="cline-any cline-yes">7x</span>
-<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">32x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1110x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1110x</span>
+<span class="cline-any cline-yes">1110x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1110x</span>
+<span class="cline-any cline-yes">100x</span>
+<span class="cline-any cline-yes">100x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1110x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">14x</span>
-<span class="cline-any cline-yes">7x</span>
-<span class="cline-any cline-yes">7x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">3x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -556,25 +757,44 @@
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">3x</span>
 <span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">3x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">7x</span>
 <span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">6x</span>
-<span class="cline-any cline-yes">6x</span>
-<span class="cline-any cline-yes">6x</span>
-<span class="cline-any cline-yes">6x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">2x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -582,22 +802,7 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">4x</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">4x</span>
-<span class="cline-any cline-yes">4x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">4x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-yes">2x</span>
 <span class="cline-any cline-yes">2x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -607,669 +812,497 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">7x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">7x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">7x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">7x</span>
-<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">7x</span>
-<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">7x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">7x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">7x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">7x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">7x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">7x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">7x</span>
-<span class="cline-any cline-yes">16x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">7x</span>
-<span class="cline-any cline-yes">16x</span>
-<span class="cline-any cline-yes">9x</span>
-<span class="cline-any cline-yes">9x</span>
-<span class="cline-any cline-yes">9x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">7x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">7x</span>
-<span class="cline-any cline-yes">7x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">7x</span>
-<span class="cline-any cline-yes">16x</span>
-<span class="cline-any cline-yes">7x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">7x</span>
-<span class="cline-any cline-yes">7x</span>
-<span class="cline-any cline-yes">7x</span>
-<span class="cline-any cline-yes">7x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">7x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">4x</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">4x</span>
-<span class="cline-any cline-yes">10x</span>
-<span class="cline-any cline-yes">10x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">4x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">7x</span>
-<span class="cline-any cline-yes">7x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">7x</span>
-<span class="cline-any cline-yes">7x</span>
-<span class="cline-any cline-yes">7x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">7x</span>
-<span class="cline-any cline-yes">7x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">7x</span>
-<span class="cline-any cline-yes">7x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">7x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">7x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">3x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">7x</span>
-<span class="cline-any cline-yes">7x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">3x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">7x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">7x</span>
-<span class="cline-any cline-yes">7x</span>
-<span class="cline-any cline-yes">7x</span>
-<span class="cline-any cline-yes">7x</span>
-<span class="cline-any cline-yes">7x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">7x</span>
-<span class="cline-any cline-yes">7x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">7x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">7x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">7x</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">7x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">7x</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">7x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">16x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">7x</span>
-<span class="cline-any cline-yes">7x</span>
-<span class="cline-any cline-yes">7x</span>
-<span class="cline-any cline-yes">7x</span>
-<span class="cline-any cline-yes">224x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">7x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">14x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">1x</span></td><td class="text"><pre class="prettyprint lang-js">const { AsyncLock } = require('../concurrency');
-const { LRUCache } = require('../memory/cache/lru');
-const { ThoughtError } = require('../errors/thoughtError');
-const { ChainUtil } = require("./utils/chainUtil")
+<span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">import { AsyncLock } from '../concurrency';
+import { MetricsCollector } from './metrics/collector';
+import { ThoughtError } from '../errors/thoughtError';
 &nbsp;
-class EnhancedPatternOptimizer {
-    constructor(performanceTracker) {
-        this.performanceTracker = performanceTracker;
-        this.patterns = new Map();
-        this.cache = new LRUCache(1000);
-        this.learningRate = 0.1;
-&nbsp;
-        // Add AI configuration
-        this.aiConfig = {
-            endpoint: null,
-            apiKey: null,
-            optimizerModel: null
+class EnhancedDebugSystem {
+    constructor(config = <span class="branch-0 cbranch-no" title="branch not covered" >{})</span> {
+        this.logs = new Map();
+        this.breakpoints = new Set();
+        this.metrics = new MetricsCollector();
+        this.alertThresholds = config.alertThresholds || <span class="branch-1 cbranch-no" title="branch not covered" >{</span>
+            memory: 0.8,    // 80% of available memory
+            cpu: 0.9,       // 90% CPU usage
+            time: 5000,     // 5 seconds
+            errors: 10      // Number of errors per minute
         };
+        this.monitoringIntervalId = null;
+        this.errorCount = new Map(); // Track errors per minute
+        this.debugHooks = new Map(); // Custom debug hooks
+        this.setupMonitoring();
     }
 &nbsp;
-    async optimizeChain(thoughtChain) {
-        const chainHash = this.hashChain(thoughtChain);
-        const cachedOptimization = this.cache.get(chainHash);
-&nbsp;
-        <span class="missing-if-branch" title="else path not taken" >E</span>if (cachedOptimization) {
-            // Validate cached optimization
-            try {
-                await this.validateOptimization(cachedOptimization, thoughtChain);
-<span class="cstat-no" title="statement not covered" >                return cachedOptimization;</span>
-            } catch (error) {
-                console.warn('Cached optimization invalid:', error);
-                this.cache.delete(chainHash); // Remove invalid cache entry
-            }
+    setupMonitoring() {
+        <span class="missing-if-branch" title="if path not taken" >I</span>if (this.monitoringIntervalId) {
+<span class="cstat-no" title="statement not covered" >            clearInterval(this.monitoringIntervalId);</span>
         }
-&nbsp;
-        const optimizedChain = await this.analyzeAndOptimize(thoughtChain);
-        this.cache.set(chainHash, optimizedChain);
-        return optimizedChain;
+        this.monitoringIntervalId = setInterval(<span class="fstat-no" title="function not covered" >()</span> =&gt; <span class="cstat-no" title="statement not covered" >this.checkSystemHealth(),</span> 5000);
     }
 &nbsp;
-    async validateOptimization(optimization, originalChain) {
-        // Ensure all thoughts exist
-        const thoughtIds = new Set(originalChain.map(t =&gt; t.id));
-        for (const thought of optimization) {
-            <span class="missing-if-branch" title="else path not taken" >E</span>if (!thoughtIds.has(thought.id)) {
-                throw new Error(`Optimization references non-existent thought: ${thought.id}`);
-            }
-        }
-&nbsp;
-        // Validate dependencies
-<span class="cstat-no" title="statement not covered" >        for (const thought of optimization) {</span>
-<span class="cstat-no" title="statement not covered" >            if (thought.dependencies) {</span>
-<span class="cstat-no" title="statement not covered" >                for (const depId of thought.dependencies) {</span>
-<span class="cstat-no" title="statement not covered" >                    if (!thoughtIds.has(depId)) {</span>
-<span class="cstat-no" title="statement not covered" >                        throw new Error(`Invalid dependency: ${depId} in thought ${thought.id}`);</span>
-                    }
-                }
-            }
-        }
-&nbsp;
-        // Ensure no circular dependencies
-<span class="cstat-no" title="statement not covered" >        this.checkForCircularDependencies(optimization);</span>
-&nbsp;
-<span class="cstat-no" title="statement not covered" >        return true;</span>
-    }
-&nbsp;
-<span class="fstat-no" title="function not covered" >    ch</span>eckForCircularDependencies(chain) {
-        const visited = <span class="cstat-no" title="statement not covered" >new Set();</span>
-        const recursionStack = <span class="cstat-no" title="statement not covered" >new Set();</span>
-&nbsp;
-        const dfs = <span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" >(t</span>houghtId) =&gt; {</span>
-<span class="cstat-no" title="statement not covered" >            if (recursionStack.has(thoughtId)) {</span>
-<span class="cstat-no" title="statement not covered" >                throw new Error(`Circular dependency detected: ${thoughtId}`);</span>
-            }
-<span class="cstat-no" title="statement not covered" >            if (visited.has(thoughtId)) {</span>
-<span class="cstat-no" title="statement not covered" >                return;</span>
-            }
-&nbsp;
-<span class="cstat-no" title="statement not covered" >            visited.add(thoughtId);</span>
-<span class="cstat-no" title="statement not covered" >            recursionStack.add(thoughtId);</span>
-&nbsp;
-            const thought = <span class="cstat-no" title="statement not covered" >chain.find(<span class="fstat-no" title="function not covered" >t </span>=&gt; <span class="cstat-no" title="statement not covered" >t.id === thoughtId)</span>;</span>
-<span class="cstat-no" title="statement not covered" >            if (thought &amp;&amp; thought.dependencies) {</span>
-<span class="cstat-no" title="statement not covered" >                for (const depId of thought.dependencies) {</span>
-<span class="cstat-no" title="statement not covered" >                    dfs(depId);</span>
-                }
-            }
-&nbsp;
-<span class="cstat-no" title="statement not covered" >            recursionStack.delete(thoughtId);</span>
-        };
-&nbsp;
-<span class="cstat-no" title="statement not covered" >        for (const thought of chain) {</span>
-<span class="cstat-no" title="statement not covered" >            dfs(thought.id);</span>
-        }
-    }
-&nbsp;
-    async analyzeAndOptimize(thoughtChain) {
-        if (!this.aiConfig || !this.aiConfig.optimizerModel) {
-            return this.baselineOptimization(thoughtChain);
-        }
-    
-        let attempts = 2;
-        while (attempts &gt; 0) {
-            try {
-                const response = await fetch(`${this.aiConfig.endpoint}/optimize`, {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer ${this.aiConfig.apiKey}`,
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        chain: thoughtChain,
-                        model: this.aiConfig.optimizerModel
-                    })
-                });
-    
-                <span class="missing-if-branch" title="if path not taken" >I</span>if (!response.ok) {
-                    const text = <span class="cstat-no" title="statement not covered" >await response.text();</span>
-<span class="cstat-no" title="statement not covered" >                    if (text.includes('Rate limited') &amp;&amp; attempts &gt; 1) {</span>
-<span class="cstat-no" title="statement not covered" >                        attempts--;</span>
-<span class="cstat-no" title="statement not covered" >                        continue; </span>// retry once
-                    } else {
-<span class="cstat-no" title="statement not covered" >                        throw new Error('API Error');</span>
-                    }
-                }
-    
-                const aiOptimization = await response.json();
-                const merged = this.mergeWithBaselineOptimization(
-                    aiOptimization,
-                    await this.baselineOptimization(thoughtChain)
-                );
-                return merged;
-            } catch (error) {
-                console.error('AI optimization failed, using baseline:', error);
-                return this.baselineOptimization(thoughtChain);
-            }
-        }
-    }
-    
-    
-&nbsp;
-    async baselineOptimization(thoughtChain) {
+    async destroy() {
         try {
-            // Build dependency graph
-            const graph = this.buildDependencyGraph(thoughtChain);
+            if (this.monitoringIntervalId) {
+                clearInterval(this.monitoringIntervalId);
+                this.monitoringIntervalId = null;
+            }
+    
+            try {
+                await this.clearLogs();
+            } catch (error) {
+                console.error('Error clearing logs:', error);
+                // Continue with cleanup despite log clearing error
+            }
+    
+            this.breakpoints.clear();
+            this.errorCount.clear();
+            this.debugHooks.clear();
             
-            // Find all possible execution paths
-            const paths = this.findExecutionPaths(graph);
-            
-            // Optimize each path
-            const optimizedPaths = await Promise.all(
-                paths.map(path =&gt; this.optimizePath(path))
-            );
-&nbsp;
-            // Analyze metrics for each optimized path
-            const pathMetrics = await Promise.all(
-                optimizedPaths.map(async path =&gt; ({
-                    path,
-                    metrics: await this.calculatePathMetrics(path)
-                }))
-            );
-&nbsp;
-            // Select best path based on metrics
-            const bestPath = this.selectOptimalPath(pathMetrics);
-            
-            // Apply performance patterns
-            const patternOptimizedPath = await this.applyPerformancePatterns(bestPath);
-            
-            // Validate final optimization
-            await this.validateOptimization(patternOptimizedPath, thoughtChain);
-            
-<span class="cstat-no" title="statement not covered" >            return patternOptimizedPath;</span>
+            return true;
         } catch (error) {
-            console.error('Baseline optimization failed:', error);
-            // Return original chain if optimization fails
-            return thoughtChain;
+<span class="cstat-no" title="statement not covered" >            console.error('Error during debug system destruction:', error);</span>
+<span class="cstat-no" title="statement not covered" >            throw error;</span>
         }
     }
 &nbsp;
-    buildDependencyGraph(thoughtChain) {
-        const graph = new Map();
+    async checkSystemHealth() {
+        try {
+            const metrics = await this.metrics.collect();
+            const alerts = [];
 &nbsp;
-        thoughtChain.forEach(thought =&gt; {
-            graph.set(thought.id, {
-                thought,
-                dependencies: new Set(thought.dependencies || []),
-                dependents: new Set()
-            });
-        });
+            // Check memory usage
+            if (metrics.memory.heapUsedPercentage &gt; this.alertThresholds.memory) {
+                alerts.push({
+                    type: 'MemoryAlert',
+                    value: metrics.memory.heapUsedPercentage,
+                    threshold: this.alertThresholds.memory,
+                    timestamp: Date.now()
+                });
+            }
 &nbsp;
-        // Build reverse dependencies
-        thoughtChain.forEach(thought =&gt; {
-            (thought.dependencies || []).forEach(depId =&gt; {
-                const node = graph.get(depId);
-                <span class="missing-if-branch" title="else path not taken" >E</span>if (node) {
-                    node.dependents.add(thought.id);
+            // Check CPU usage
+            if (metrics.cpu.percentage &gt; this.alertThresholds.cpu) {
+                alerts.push({
+                    type: 'CPUAlert',
+                    value: metrics.cpu.percentage,
+                    threshold: this.alertThresholds.cpu,
+                    timestamp: Date.now()
+                });
+            }
+&nbsp;
+            // Clean up old error counts
+            const oneMinuteAgo = Date.now() - 60000;
+            for (const [key, value] of this.errorCount) {
+<span class="cstat-no" title="statement not covered" >                if (value.timestamp &lt; oneMinuteAgo) {</span>
+<span class="cstat-no" title="statement not covered" >                    this.errorCount.delete(key);</span>
                 }
-            });
-        });
+            }
 &nbsp;
+            <span class="missing-if-branch" title="else path not taken" >E</span>if (alerts.length &gt; 0) {
+                this.handleAlerts(alerts);
+            }
+&nbsp;
+            // Store health check results
+            this.logs.set('healthCheck', {
+                timestamp: Date.now(),
+                metrics,
+                alerts
+            });
+        } catch (error) {
+<span class="cstat-no" title="statement not covered" >            this.log('error', 'Health check failed', { error: error.message });</span>
+        }
+    }
+&nbsp;
+    handleAlerts(alerts) {
+        for (const alert of alerts) {
+            this.log('alert', `System alert: ${alert.type}`, alert);
+&nbsp;
+            // Execute any registered alert handlers
+            const handler = this.debugHooks.get(alert.type);
+            <span class="missing-if-branch" title="else path not taken" >E</span>if (handler) {
+                try {
+                    handler(alert);
+                } catch (error) {
+<span class="cstat-no" title="statement not covered" >                    this.log('error', 'Alert handler failed', {</span>
+                        alertType: alert.type,
+                        error: error.message
+                    });
+                }
+            }
+        }
+    }
+&nbsp;
+    async inspectThought(thought) {
+        const inspection = {
+            id: thought.id,
+            type: thought.type,
+            timestamp: Date.now(),
+            memory: await this.metrics.getMemoryProfile(thought),
+            traces: await this.collectTraces(thought),
+            resourceUsage: await this.metrics.getResourceUsage(thought),
+            executionGraph: this.generateExecutionGraph(thought),
+            dependencies: await this.analyzeDependencies(thought)
+        };
+&nbsp;
+        this.logs.set(`thought_${thought.id}`, inspection);
+        return inspection;
+    }
+&nbsp;
+    async collectTraces(thought) {
+        return {
+            executionPath: this.captureExecutionPath(thought),
+            functionCalls: await this.traceFunctionCalls(thought),
+            resourceAccess: this.trackResourceAccess(thought),
+            timing: this.measureExecutionTimes(thought)
+        };
+    }
+&nbsp;
+    async traceFunctionCalls(thought) {
+        const calls = [];
+        const originalFunctions = new Map();
+    
+        // Store original functions and create proxies
+        for (const key in thought) {
+            if (typeof thought[key] === 'function' &amp;&amp; key !== 'then') { // Exclude Promise methods
+                originalFunctions.set(key, thought[key]);
+                thought[key] = new Proxy(thought[key], {
+                    apply: async (target, thisArg, args) =&gt; {
+                        const start = performance.now();
+                        const callInfo = {
+                            function: key,
+                            arguments: args.map(arg =&gt; this.sanitizeArg(arg)),
+                            timestamp: Date.now()
+                        };
+    
+                        try {
+                            const result = await target.apply(thisArg, args);
+                            callInfo.duration = performance.now() - start;
+                            callInfo.status = 'success';
+                            callInfo.result = this.sanitizeArg(result);
+                            calls.push(callInfo); // Move this inside try block
+                            return result;
+                        } catch (error) {
+<span class="cstat-no" title="statement not covered" >                            callInfo.duration = performance.now() - start;</span>
+<span class="cstat-no" title="statement not covered" >                            callInfo.status = 'error';</span>
+<span class="cstat-no" title="statement not covered" >                            callInfo.error = error.message;</span>
+<span class="cstat-no" title="statement not covered" >                            calls.push(callInfo); </span>// Also track failed calls
+<span class="cstat-no" title="statement not covered" >                            throw error;</span>
+                        }
+                    }
+                });
+            }
+        }
+    
+        // Ensure function was actually called
+        await thought.execute();
+    
+        // Restore original functions
+        for (const [key, originalFn] of originalFunctions) {
+            thought[key] = originalFn;
+        }
+    
+        return calls;
+    }
+&nbsp;
+    sanitizeArg(arg) {
+        // Safely stringify arguments and results for logging
+        try {
+            <span class="missing-if-branch" title="if path not taken" >I</span>if (arg === undefined) <span class="cstat-no" title="statement not covered" >return 'undefined';</span>
+            <span class="missing-if-branch" title="if path not taken" >I</span>if (arg === null) <span class="cstat-no" title="statement not covered" >return 'null';</span>
+            <span class="missing-if-branch" title="if path not taken" >I</span>if (typeof arg === 'function') <span class="cstat-no" title="statement not covered" >return 'function';</span>
+            <span class="missing-if-branch" title="if path not taken" >I</span>if (typeof arg === 'object') {
+<span class="cstat-no" title="statement not covered" >                return JSON.stringify(arg, <span class="fstat-no" title="function not covered" >(k</span>ey, value) =&gt; {</span>
+<span class="cstat-no" title="statement not covered" >                    if (typeof value === 'function') <span class="cstat-no" title="statement not covered" >return 'function';</span></span>
+<span class="cstat-no" title="statement not covered" >                    if (value instanceof Error) <span class="cstat-no" title="statement not covered" >return value.message;</span></span>
+<span class="cstat-no" title="statement not covered" >                    return value;</span>
+                });
+            }
+            return String(arg);
+        } catch (error) {
+<span class="cstat-no" title="statement not covered" >            return '[Complex Object]';</span>
+        }
+    }
+&nbsp;
+    captureExecutionPath(thought) {
+        const path = [];
+        let currentNode = thought;
+&nbsp;
+        while (currentNode) {
+            path.push({
+                id: currentNode.id,
+                type: currentNode.type,
+                timestamp: currentNode.timestamp
+            });
+            currentNode = currentNode.parent;
+        }
+&nbsp;
+        return path;
+    }
+&nbsp;
+    trackResourceAccess(thought) {
+        return {
+            memory: this.getMemoryAccess(thought),
+            storage: this.getStorageAccess(thought),
+            network: this.getNetworkAccess(thought)
+        };
+    }
+&nbsp;
+    measureExecutionTimes(thought) {
+        return {
+            total: 0,
+            phases: [],
+            bottlenecks: []
+        };
+    }
+&nbsp;
+    log(level, message, context = {}) {
+        const logEntry = {
+            timestamp: Date.now(),
+            level,
+            message,
+            context
+        };
+&nbsp;
+        // Store in logs map
+        const key = `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        this.logs.set(key, logEntry);
+&nbsp;
+        // Trim old logs if necessary
+        if (this.logs.size &gt; 1000) { // Keep last 1000 logs
+            const oldestKey = Array.from(this.logs.keys())[0];
+            this.logs.delete(oldestKey);
+        }
+&nbsp;
+        return logEntry;
+    }
+&nbsp;
+    clearLogs() {
+        this.logs.clear();
+    }
+&nbsp;
+    getLogsByLevel(level) {
+        return Array.from(this.logs.values())
+            .filter(entry =&gt; entry.level === level);
+    }
+&nbsp;
+<span class="fstat-no" title="function not covered" >    se</span>tBreakpoint(thoughtId, condition) {
+<span class="cstat-no" title="statement not covered" >        this.breakpoints.set(thoughtId, condition);</span>
+    }
+&nbsp;
+<span class="fstat-no" title="function not covered" >    re</span>moveBreakpoint(thoughtId) {
+<span class="cstat-no" title="statement not covered" >        this.breakpoints.delete(thoughtId);</span>
+    }
+&nbsp;
+    registerDebugHook(event, handler) {
+        <span class="missing-if-branch" title="if path not taken" >I</span>if (typeof handler !== 'function') {
+<span class="cstat-no" title="statement not covered" >            throw new Error('Debug hook handler must be a function');</span>
+        }
+        this.debugHooks.set(event, handler);
+    }
+&nbsp;
+    getDebugSnapshot() {
+        return {
+            timestamp: Date.now(),
+            logs: Array.from(this.logs.entries()),
+            metrics: this.metrics.getLatestMetrics(),
+            breakpoints: Array.from(this.breakpoints),
+            errorCounts: Array.from(this.errorCount.entries())
+        };
+    }
+&nbsp;
+    generateExecutionGraph(thought) {
+        const graph = {
+            nodes: [],
+            edges: []
+        };
+&nbsp;
+        const visited = new Set();
+&nbsp;
+        const addNode = (node) =&gt; {
+            <span class="missing-if-branch" title="if path not taken" >I</span>if (visited.has(node.id)) <span class="cstat-no" title="statement not covered" >return;</span>
+            visited.add(node.id);
+&nbsp;
+            graph.nodes.push({
+                id: node.id,
+                type: node.type,
+                timestamp: node.timestamp
+            });
+&nbsp;
+            if (node.dependencies) {
+                node.dependencies.forEach(depId =&gt; {
+                    graph.edges.push({
+                        from: depId,
+                        to: node.id
+                    });
+                });
+            }
+&nbsp;
+            if (node.children) {
+                node.children.forEach(child =&gt; {
+                    addNode(child);
+                    graph.edges.push({
+                        from: node.id,
+                        to: child.id
+                    });
+                });
+            }
+        };
+&nbsp;
+        addNode(thought);
         return graph;
     }
 &nbsp;
-    findExecutionPaths(graph) {
-        const paths = [];
+    async analyzeDependencies(thought) {
+        const dependencies = {
+            direct: [],
+            indirect: [],
+            circular: []
+        };
+&nbsp;
         const visited = new Set();
+        const stack = new Set();
 &nbsp;
-        // Find root nodes (nodes with no dependencies)
-        const roots = Array.from(graph.entries())
-            .filter(([_, node]) =&gt; node.dependencies.size === 0)
-            .map(([id]) =&gt; id);
-&nbsp;
-        // DFS from each root
-        roots.forEach(root =&gt; {
-            const path = ChainUtil.explorePath(root, graph, visited, []);
-            <span class="missing-if-branch" title="else path not taken" >E</span>if (path.length &gt; 0) {
-                paths.push(path);
+        const analyzeDep = async (node) =&gt; {
+            <span class="missing-if-branch" title="if path not taken" >I</span>if (stack.has(node.id)) {
+<span class="cstat-no" title="statement not covered" >                dependencies.circular.push(node.id);</span>
+<span class="cstat-no" title="statement not covered" >                return;</span>
             }
-        });
 &nbsp;
-        return paths;
-    }
+            <span class="missing-if-branch" title="if path not taken" >I</span>if (visited.has(node.id)) <span class="cstat-no" title="statement not covered" >return;</span>
 &nbsp;
-    mergeWithBaselineOptimization(aiOptimization, baselineOptimization) {
-        <span class="missing-if-branch" title="if path not taken" >I</span>if (!Array.isArray(aiOptimization) || !Array.isArray(baselineOptimization)) {
-<span class="cstat-no" title="statement not covered" >            return baselineOptimization || [];</span>
-        }
-    
-        // Merge by taking unique thoughts keyed by 'id'
-        const thoughtMap = new Map();
-        baselineOptimization.forEach(t =&gt; thoughtMap.set(t.id, t));
-        aiOptimization.forEach(t =&gt; thoughtMap.set(t.id, t));
-    
-        // Return only a filtered set of final thoughts
-        return Array.from(thoughtMap.values());
-    }
-    
+            stack.add(node.id);
+            visited.add(node.id);
 &nbsp;
-    async optimizePath(path) {
-        const optimizedPath = [];
-        let currentBatch = [];
+            <span class="missing-if-branch" title="else path not taken" >E</span>if (node.dependencies) {
+                for (const depId of node.dependencies) {
+                    dependencies.direct.push({
+                        from: node.id,
+                        to: depId
+                    });
 &nbsp;
-        for (const thoughtId of path) {
-            const thought = this.getThought(thoughtId);
-            const metrics = await this.analyzeThought(thought);
-&nbsp;
-            // Check if thought can be batched
-            if (this.canBatch(thought, currentBatch, metrics)) {
-                currentBatch.push(thought);
-            } else <span class="missing-if-branch" title="else path not taken" >E</span>{
-<span class="cstat-no" title="statement not covered" >                if (currentBatch.length &gt; 0) {</span>
-<span class="cstat-no" title="statement not covered" >                    optimizedPath.push(this.createBatch(currentBatch));</span>
-<span class="cstat-no" title="statement not covered" >                    currentBatch = [thought];</span>
-                } else {
-<span class="cstat-no" title="statement not covered" >                    optimizedPath.push(thought);</span>
+                    const depNode = await this.getThought(depId);
+                    <span class="missing-if-branch" title="if path not taken" >I</span>if (depNode) {
+<span class="cstat-no" title="statement not covered" >                        await analyzeDep(depNode);</span>
+                    }
                 }
             }
-        }
 &nbsp;
-        // Handle remaining batch
-        <span class="missing-if-branch" title="else path not taken" >E</span>if (currentBatch.length &gt; 0) {
-            optimizedPath.push(this.createBatch(currentBatch));
-        }
-&nbsp;
-        return optimizedPath;
-    }
-&nbsp;
-    canBatch(thought, batch, metrics) {
-        <span class="missing-if-branch" title="else path not taken" >E</span>if (batch.length === 0) return true;
-&nbsp;
-        // Check resource usage
-        const batchMetrics = <span class="cstat-no" title="statement not covered" >batch.map(<span class="fstat-no" title="function not covered" >t </span>=&gt; <span class="cstat-no" title="statement not covered" >this.getThoughtMetrics(t.id))</span>;</span>
-        const totalResources = <span class="cstat-no" title="statement not covered" >this.calculateTotalResources(batchMetrics);</span>
-&nbsp;
-        // Check if adding this thought would exceed resource limits
-<span class="cstat-no" title="statement not covered" >        return this.checkResourceLimits(totalResources, metrics);</span>
-    }
-&nbsp;
-    createBatch(thoughts) {
-        return {
-            id: `batch_${thoughts.map(t =&gt; t.id).join('_')}`,
-            type: 'batch',
-            thoughts: thoughts,
-            execute: <span class="fstat-no" title="function not covered" >as</span>ync (context) =&gt; {
-<span class="cstat-no" title="statement not covered" >                return Promise.all(thoughts.map(<span class="fstat-no" title="function not covered" >t </span>=&gt; <span class="cstat-no" title="statement not covered" >t.execute(context))</span>);</span>
-            }
-        };
-    }
-&nbsp;
-<span class="fstat-no" title="function not covered" >    ch</span>eckResourceLimits(currentTotal, newMetrics) {
-        // Implement resource limit checks
-        const limits = <span class="cstat-no" title="statement not covered" >{</span>
-            memory: 1000000000, // 1GB
-            cpu: 0.8, // 80% CPU
-            time: 1000 // 1 second
+            stack.delete(node.id);
         };
 &nbsp;
-<span class="cstat-no" title="statement not covered" >        return Object.entries(limits).every(<span class="fstat-no" title="function not covered" >([</span>resource, limit]) =&gt; {</span>
-<span class="cstat-no" title="statement not covered" >            return (currentTotal[resource] || 0) + (newMetrics[resource] || 0) &lt;= limit;</span>
-        });
-    }
-&nbsp;
-    async calculatePathMetrics(path) {
-        const metrics = {
-            totalExecutionTime: 0,
-            peakMemoryUsage: 0,
-            cpuUtilization: 0,
-            resourceEfficiency: 0
-        };
-&nbsp;
-        for (const thought of path) {
-            const thoughtMetrics = await this.analyzeThought(thought);
-            metrics.totalExecutionTime += thoughtMetrics.executionTime || <span class="branch-1 cbranch-no" title="branch not covered" >0;</span>
-            metrics.peakMemoryUsage = Math.max(metrics.peakMemoryUsage, thoughtMetrics.memoryUsage || <span class="branch-1 cbranch-no" title="branch not covered" >0)</span>;
-            metrics.cpuUtilization = Math.max(metrics.cpuUtilization, thoughtMetrics.cpuUsage || <span class="branch-1 cbranch-no" title="branch not covered" >0)</span>;
-        }
-&nbsp;
-        // Calculate resource efficiency score
-        metrics.resourceEfficiency = this.calculateEfficiencyScore(metrics);
-        return metrics;
-    }
-&nbsp;
-    calculateEfficiencyScore(metrics) {
-        const weights = {
-            executionTime: 0.4,
-            memoryUsage: 0.3,
-            cpuUtilization: 0.3
-        };
-&nbsp;
-        return (
-            (1 / (metrics.totalExecutionTime + 1)) * weights.executionTime +
-            (1 / (metrics.peakMemoryUsage + 1)) * weights.memoryUsage +
-            (1 / (metrics.cpuUtilization + 1)) * weights.cpuUtilization
-        );
-    }
-&nbsp;
-    selectOptimalPath(pathMetrics) {
-        return pathMetrics.reduce(<span class="fstat-no" title="function not covered" >(b</span>est, current) =&gt; {
-<span class="cstat-no" title="statement not covered" >            if (!best || current.metrics.resourceEfficiency &gt; best.metrics.resourceEfficiency) {</span>
-<span class="cstat-no" title="statement not covered" >                return current;</span>
-            }
-<span class="cstat-no" title="statement not covered" >            return best;</span>
-        }).path;
-    }
-&nbsp;
-    async applyPerformancePatterns(path) {
-        const optimizedPath = [...path];
-        
-        // Apply known optimization patterns
-        for (const [patternName, pattern] of this.patterns) {
-<span class="cstat-no" title="statement not covered" >            try {</span>
-                const patternResult = <span class="cstat-no" title="statement not covered" >await pattern.apply(optimizedPath);</span>
-<span class="cstat-no" title="statement not covered" >                if (patternResult.improved) {</span>
-<span class="cstat-no" title="statement not covered" >                    optimizedPath.splice(0, optimizedPath.length, ...patternResult.path);</span>
-                }
-            } catch (error) {
-<span class="cstat-no" title="statement not covered" >                console.error(`Failed to apply pattern ${patternName}:`, error);</span>
-            }
-        }
-&nbsp;
-        return optimizedPath;
-    }
-&nbsp;
-    async hashChain(thoughtChain) {
-        const chainData = thoughtChain.map(t =&gt; ({
-            id: t.id,
-            dependencies: t.dependencies || []
-        }));
-        
-        const encoder = new TextEncoder();
-        const data = encoder.encode(JSON.stringify(chainData));
-        const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-        const hashArray = Array.from(new Uint8Array(hashBuffer));
-        return hashArray.map(b =&gt; b.toString(16).padStart(2, '0')).join('');
+        await analyzeDep(thought);
+        return dependencies;
     }
 &nbsp;
     async getThought(thoughtId) {
-        // Implementation would depend on how thoughts are stored
-        // This is a placeholder that should be implemented based on the actual storage mechanism
-        return this.performanceTracker.getThought(thoughtId);
+        // Implementation would depend on how thoughts are stored/retrieved
+        // This is a placeholder
+        return null;
     }
 &nbsp;
-    async analyzeThought(thought) {
-        // This would be implemented based on the actual metrics collection system
-        return this.performanceTracker.getMetrics(thought.id);
+    getMemoryAccess(thought) {
+        return {
+            reads: [],
+            writes: [],
+            allocations: []
+        };
     }
 &nbsp;
-<span class="fstat-no" title="function not covered" >    ca</span>lculateTotalResources(metrics) {
-<span class="cstat-no" title="statement not covered" >        return metrics.reduce(<span class="fstat-no" title="function not covered" >(t</span>otal, metric) =&gt; {</span>
-<span class="cstat-no" title="statement not covered" >            Object.entries(metric).forEach(<span class="fstat-no" title="function not covered" >([</span>key, value]) =&gt; {</span>
-<span class="cstat-no" title="statement not covered" >                total[key] = (total[key] || 0) + value;</span>
-            });
-<span class="cstat-no" title="statement not covered" >            return total;</span>
-        }, {});
+    getStorageAccess(thought) {
+        return {
+            reads: [],
+            writes: [],
+            deletes: []
+        };
     }
 &nbsp;
-<span class="fstat-no" title="function not covered" >    as</span>ync getThoughtMetrics(thoughtId) {
-        // This would be implemented based on the actual metrics collection system
-<span class="cstat-no" title="statement not covered" >        return this.performanceTracker.getThoughtMetrics(thoughtId);</span>
+    getNetworkAccess(thought) {
+        return {
+            requests: [],
+            responses: [],
+            errors: []
+        };
     }
 }
 &nbsp;
-module.exports = { EnhancedPatternOptimizer };</pre></td></tr></table></pre>
+export {EnhancedDebugSystem}</pre></td></tr></table></pre>
 
                 <div class='push'></div><!-- for sticky footer -->
             </div><!-- /wrapper -->
