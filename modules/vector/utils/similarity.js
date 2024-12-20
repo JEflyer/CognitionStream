@@ -51,3 +51,5 @@ class VectorSimilarity {
         return sum;
     }
 }
+
+export {VectorSimilarity}

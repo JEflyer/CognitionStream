@@ -1,4 +1,4 @@
-export class VectorStore {
+class VectorStore {
     /**
      * @abstract
      * Generate an embedding for the given data
@@ -106,3 +106,5 @@ export class VectorStore {
         throw new Error('getDimensions must be implemented');
     }
 }
+
+export {VectorStore}

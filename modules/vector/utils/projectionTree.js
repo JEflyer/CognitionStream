@@ -1,4 +1,4 @@
-import { AsyncLock } from '../concurrency';
+import { AsyncLock } from '../../concurrency';
 
 class RandomProjectionTree {
     constructor(dimensions = 128, maxLeafSize = 10) {
@@ -332,3 +332,5 @@ class RandomProjectionTree {
         }
     }
 }
+
+export {RandomProjectionTree}

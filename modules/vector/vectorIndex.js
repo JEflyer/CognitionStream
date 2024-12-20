@@ -1,4 +1,4 @@
-import { AsyncLock } from '../../concurrency';
+import { AsyncLock } from '../concurrency';
 import { RandomProjectionTree } from './utils/projectionTree';
 import { ThoughtError } from '../errors/thoughtError';
 
@@ -260,3 +260,5 @@ class VectorIndex {
         };
     }
 }
+
+export {VectorIndex}

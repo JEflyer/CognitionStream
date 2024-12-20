@@ -255,3 +255,5 @@ class ThoughtError extends Error {
         return Math.floor(delay);
     }
 }
+
+export {ThoughtError}

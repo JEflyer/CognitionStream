@@ -312,3 +312,5 @@ class EnhancedMemorySystem {
         await CompressionUtil.cleanupTemporaryResources();
     }
 }
+
+export {EnhancedMemorySystem}
